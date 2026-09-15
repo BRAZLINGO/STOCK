@@ -1,0 +1,76 @@
+name: Midcap reversal scan
+
+on:
+  schedule:
+    # 10:45 UTC = 4:15 PM IST, Monday to Friday (45 min after the NSE close).
+    - cron: "45 10 * * 1-5"
+  workflow_dispatch:        # lets you run it by hand from the Actions tab
+
+permissions:
+  contents: write           # needed to commit data.json back to the repo
+
+concurrency:
+  group: midcap-scan
+  cancel-in-progress: false
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run the scan
+        id: scan
+        run: python scanner.py
+
+      - name: Commit the new data
+        run: |
+          git config user.name  "midcap-scanner"
+          git config user.email "actions@github.com"
+          git add data.json alerts.md
+          if git diff --staged --quiet; then
+            echo "nothing changed"
+          else
+            git commit -m "scan: $(date -u +%Y-%m-%d)"
+            git push
+          fi
+
+      # --- optional e-mail -------------------------------------------------
+      # Skipped automatically unless you add the three secrets in
+      # Settings -> Secrets and variables -> Actions:
+      #   MAIL_USERNAME  your gmail address
+      #   MAIL_PASSWORD  a Gmail App Password (not your login password)
+      #   MAIL_TO        where the digest should land
+      - name: Read the alert digest
+        if: steps.scan.outputs.has_alerts == 'true'
+        id: digest
+        run: |
+          {
+            echo 'body<<DIGEST_EOF'
+            cat alerts.md
+            echo DIGEST_EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Email the digest
+        if: steps.scan.outputs.has_alerts == 'true' && env.MAIL_USERNAME != ''
+        env:
+          MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: Midcap Reversal Desk
+          to: ${{ secrets.MAIL_TO }}
+          subject: ${{ steps.scan.outputs.subject }}
+          body: ${{ steps.digest.outputs.body }}
