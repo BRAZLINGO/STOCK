@@ -56,7 +56,8 @@ jobs:
           {
             echo 'body<<DIGEST_EOF'
             cat alerts.md
-            echo DIGEST_EOF
+            echo ''
+            echo 'DIGEST_EOF'
           } >> "$GITHUB_OUTPUT"
 
       - name: Email the digest
