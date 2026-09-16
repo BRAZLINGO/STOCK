@@ -35,7 +35,7 @@ jobs:
         run: |
           git config user.name  "midcap-scanner"
           git config user.email "actions@github.com"
-          git add data.json alerts.md
+          git add data.json alerts.md cache
           if git diff --staged --quiet; then
             echo "nothing changed"
           else
