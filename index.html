@@ -64,6 +64,8 @@ input{font:inherit; color:inherit}
 .uni-row{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
 .uni-row.selectrow{border-top:1px dashed var(--line); padding-top:11px}
 .sectorpick{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin-left:auto}
+.indexpick{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
+#uniSel{min-width:190px; font-weight:600}
 .chip .n{font-family:var(--mono); font-size:11px; opacity:.75; margin-left:5px}
 .riskbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px 26px; margin-top:12px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:4px}
 .field{display:flex; align-items:center; gap:9px}
@@ -256,13 +258,19 @@ footer b{color:var(--muted); font-weight:600}
     width:100%; background:transparent; border:0; padding:13px 14px; min-height:48px;
     font-family:var(--display); font-weight:600; font-size:13px; text-align:left}
   .ctrltoggle .chev{color:var(--faint); font-family:var(--mono)}
-  .unibar.collapsed .uni-body{display:none}
+  /* Collapsing hides the filters but KEEPS the index picker on screen.
+     Switching index is the thing you do most on a phone, and burying it
+     behind a tap defeats the point of having fourteen of them. */
+  .unibar.collapsed .uni-body > *:not(.uni-row-index){display:none}
+  .unibar.collapsed .uni-row-index .sectorpick{display:none}
+  .unibar.collapsed .uni-body{padding-bottom:12px}
   .uni-body{display:flex; flex-direction:column; gap:11px; padding:0 14px 14px;
     border-top:1px solid var(--line-soft)}
   .uni-head{padding-top:11px}
   .uni-row{gap:8px}
-  .sectorpick{margin-left:0; width:100%}
-  .sectorpick select{flex:1}
+  .sectorpick,.indexpick{margin-left:0; width:100%}
+  .sectorpick select,.indexpick select{flex:1}
+  .indexpick>span,.sectorpick>span{min-width:46px}
   .chip{padding:9px 12px; font-size:13px; border-radius:3px}
 
   .riskbar{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:12px 14px; margin-top:10px}
@@ -331,8 +339,11 @@ footer b{color:var(--muted); font-weight:600}
       <span class="eyebrow">Universe</span>
       <span class="formula" id="uniSource">loading…</span>
     </div>
-    <div class="uni-row">
-      <div class="chips" id="uniChips"></div>
+    <div class="uni-row uni-row-index">
+      <label class="indexpick">
+        <span>Index</span>
+        <select class="sel" id="uniSel"></select>
+      </label>
       <label class="sectorpick">
         <span>Sector</span>
         <select class="sel" id="sectorSel"><option value="">All sectors</option></select>
@@ -458,6 +469,7 @@ footer b{color:var(--muted); font-weight:600}
   var data = null, cfg = {totalRisk:100000, atrMult:1.5}, over = {};
   var filter='all', search='', sortBy='state', openRow=null;
   var uni='all', sector='', sel={momentum:false, strength:false, liquid:false};
+  var poolRows = [];   // the chosen index, states recomputed, before the other filters
   var picked=[], agreeMode='all';
   var KEY='midcap-reversal-desk';
   var COLS=13;
@@ -470,11 +482,14 @@ footer b{color:var(--muted); font-weight:600}
   function load(){
     try{
       var raw = localStorage.getItem(KEY);
-      if(raw){ var s = JSON.parse(raw); cfg = Object.assign(cfg, s.cfg||{}); over = s.over||{}; sel = Object.assign(sel, s.sel||{}); picked = s.picked||[]; }
+      if(raw){ var s = JSON.parse(raw); cfg = Object.assign(cfg, s.cfg||{}); over = s.over||{}; sel = Object.assign(sel, s.sel||{}); picked = s.picked||[];
+        if(typeof s.uni === 'string') uni = s.uni;
+        if(typeof s.sector === 'string') sector = s.sector; }
     }catch(e){ /* private mode or blocked storage: run with defaults */ }
   }
   function save(){
-    try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg, over:over, sel:sel, picked:picked})); }catch(e){}
+    try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg, over:over, sel:sel, picked:picked,
+      uni:uni, sector:sector})); }catch(e){}
   }
 
   function rptNow(){ return cfg.totalRisk / 50; }
@@ -578,6 +593,14 @@ footer b{color:var(--muted); font-weight:600}
 
     // step 1: the universe, then the selection filters from the notes
     if(uni !== 'all') out = out.filter(function(r){ return (r.universes||[]).indexOf(uni)>=0; });
+
+    // Snapshot here: the chosen index with every state recomputed, but before
+    // sector/setup/filter narrowing. The header band reports on this, so the
+    // numbers up top describe the index and agree with the list below --
+    // r.state, not r.status, because the page recomputes state against your
+    // own risk capital, ATR multiple and any resistance you overrode.
+    poolRows = out;
+
     if(sector) out = out.filter(function(r){ return r.industry === sector; });
     var floor = (data.settings && data.settings.atrPctFloor) || 3;
     if(sel.momentum) out = out.filter(function(r){ return r.atrPct!=null && r.atrPct > floor; });
@@ -651,8 +674,8 @@ footer b{color:var(--muted); font-weight:600}
   function cards(list){
     var fire = list.filter(function(r){return r.state==='triggered';});
     var armed = list.filter(function(r){return r.state==='armed';});
-    $('fireCount').textContent = String(fire.length);
-    $('armCount').textContent = String(armed.length);
+    $('fireCount').textContent = String(poolRows.filter(function(r){return r.state==='triggered';}).length);
+    $('armCount').textContent  = String(poolRows.filter(function(r){return r.state==='armed';}).length);
     $('trigSummary').textContent = fire.length+' triggered · '+armed.length+' armed';
     var zone = $('trigZone');
     if(!fire.length && !armed.length){
@@ -768,16 +791,45 @@ footer b{color:var(--muted); font-weight:600}
   function renderUniverse(){
     if(!data) return;
     var list = data.universes || [];
-    var chips = '';
-    if(list.length > 1){
-      chips += '<button class="chip" data-u="all" aria-pressed="'+(uni==='all')+'">Everything<span class="n">'+
-        data.rows.length+'</span></button>';
+
+    // Count what was actually scanned and carries each tag, not what NSE says
+    // the index holds. The two differ when a stock had no price data.
+    var rowCounts = {};
+    (data.rows||[]).forEach(function(r){
+      (r.universes||[]).forEach(function(k){ rowCounts[k] = (rowCounts[k]||0) + 1; });
+    });
+    function opt(u){
+      var n = rowCounts[u.key] || 0;
+      // An index NSE refused that morning comes through with nothing in it.
+      // Show it, so you can see something went wrong, but don't let anyone
+      // select it and land on a blank page with no explanation.
+      return '<option value="'+esc(u.key)+'"'+(uni===u.key?' selected':'')+
+             (n ? '' : ' disabled')+'>'+esc(u.label)+' ('+n+
+             (n ? '' : ' — not loaded')+')</option>';
     }
-    chips += list.map(function(u){
-      return '<button class="chip" data-u="'+esc(u.key)+'" aria-pressed="'+(uni===u.key||(list.length===1&&uni==='all'))+
-        '">'+esc(u.label)+'<span class="n">'+u.count+'</span></button>';
-    }).join('');
-    $('uniChips').innerHTML = chips;
+
+    var groups = (data.universeGroups||[]).slice();
+    var seen = {}, html = '';
+    if(list.length > 1){
+      html += '<option value="all"'+(uni==='all'?' selected':'')+'>Everything ('+
+              (data.rows||[]).length+')</option>';
+    }
+    groups.forEach(function(g){
+      var members = list.filter(function(u){ return (u.group||'other') === g.key; });
+      if(!members.length) return;
+      html += '<optgroup label="'+esc(g.label)+'">';
+      html += members.map(function(u){ seen[u.key] = 1; return opt(u); }).join('');
+      html += '</optgroup>';
+    });
+    var rest = list.filter(function(u){ return !seen[u.key]; });
+    if(rest.length){
+      // Either an older data.json with no groups, or a key added to
+      // scanner.py that universes.py has no group for. Show it regardless.
+      html += (groups.length ? '<optgroup label="Other">' : '') +
+              rest.map(opt).join('') + (groups.length ? '</optgroup>' : '');
+    }
+    $('uniSel').innerHTML = html;
+    if(list.length === 1 && uni === 'all') $('uniSel').value = list[0].key;
     var srcs = list.map(function(u){ return u.source; });
     var live = srcs.filter(function(s){ return s==='nseindia.com'; }).length;
     $('uniSource').textContent = list.length
@@ -873,6 +925,23 @@ footer b{color:var(--muted); font-weight:600}
     } else { more.hidden = true; }
   }
 
+  // A remembered index or sector can point at something this data.json no
+  // longer has -- you took an index out of UNIVERSES, or NSE returned nothing
+  // for it that morning. Left alone the page opens to an empty list with no
+  // obvious way back, so fall back to Everything instead.
+  function validateSelections(){
+    if(!data) return;
+    var list = data.universes || [];
+    if(uni !== 'all'){
+      var known = list.some(function(u){ return u.key === uni; });
+      // Also catch an index that is still listed but came back empty today.
+      var any = (data.rows || []).some(function(r){
+        return r.status !== 'nodata' && (r.universes||[]).indexOf(uni) >= 0; });
+      if(!known || !any){ uni = 'all'; save(); }
+    }
+    if(sector && (data.sectors || []).indexOf(sector) < 0){ sector = ''; save(); }
+  }
+
   function render(){
     $('rptVal').textContent = '₹'+INR0.format(cfg.totalRisk/50);
     if(!data){ return; }
@@ -881,13 +950,16 @@ footer b{color:var(--muted); font-weight:600}
         'Every price, RSI and signal on this page is randomly generated so you can try the interface. '+
         'Run the scan on your own repo and this banner disappears — the page then shows real NSE closes.</p></div>';
     } else { $('demoZone').innerHTML = ''; }
+    validateSelections();   // must run BEFORE rows(), or a remembered index
+                            // that no longer exists filters the list to zero
+                            // and the correction arrives one render too late
     var list = rows();      // sets agreeMode, so it must run before the chips render
     renderUniverse();
-    var pool = data.rows.filter(function(r){ return r.status!=='nodata'; }).length;
+    var pool = poolRows.length;
     $('selCount').textContent = list.length + ' of ' + pool + ' pass';
     cards(list);
     $('asOf').textContent = data.asOf || '—';
-    $('trackCount').textContent = String(data.rows.filter(function(r){return r.status!=='nodata';}).length);
+    $('trackCount').textContent = String(pool);
     $('listCount').textContent = (isPhone() && list.length > shownCount)
       ? ('showing ' + Math.min(shownCount, list.length) + ' of ' + list.length)
       : (list.length + ' shown');
@@ -952,7 +1024,8 @@ footer b{color:var(--muted); font-weight:600}
     else if(t.id==='atrMult'){ cfg.atrMult = Math.max(0.1, numv(t.value)||1.5); save(); render(); }
     else if(t.id==='maxDeploy'){ cfg.maxDeploy = numv(t.value)||0; save(); render(); }
     else if(t.id==='sort'){ sortBy = t.value; render(); }
-    else if(t.id==='sectorSel'){ sector = t.value; shownCount = pageSize; render(); }
+    else if(t.id==='sectorSel'){ sector = t.value; shownCount = pageSize; save(); render(); }
+    else if(t.id==='uniSel'){ uni = t.value; shownCount = pageSize; save(); render(); }
     else if(t.hasAttribute && t.hasAttribute('data-note')){
       var s = t.getAttribute('data-note'); over[s] = over[s]||{}; over[s].note = t.value; save();
     }
@@ -977,9 +1050,6 @@ footer b{color:var(--muted); font-weight:600}
     if(!b) return;
     if(b.hasAttribute('data-open')){ var s=b.getAttribute('data-open'); openRow = (openRow===s)?null:s; render(); }
     else if(b.hasAttribute('data-reset')){ var s2=b.getAttribute('data-reset'); if(over[s2]) delete over[s2].resistance; save(); render(); }
-    else if(b.hasAttribute('data-u')){
-      uni = b.getAttribute('data-u'); shownCount = pageSize; render();
-    }
     else if(b.hasAttribute('data-setup')){
       var t = b.getAttribute('data-setup');
       var at = picked.indexOf(t);

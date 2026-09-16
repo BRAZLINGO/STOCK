@@ -31,16 +31,36 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
-from universes import UNIVERSES as UNIVERSE_CATALOGUE, build_watchlist, yahoo_symbol
+from universes import (UNIVERSES as UNIVERSE_CATALOGUE, GROUPS as UNIVERSE_GROUPS,
+                       build_watchlist, yahoo_symbol)
 
 # ----------------------------------------------------------------------------
 # WHICH UNIVERSE(S) TO SCAN -- step 1 of the system.
-# Pick any keys from universes.py: NIFTY50, NIFTYNEXT50, NIFTY100,
-# NIFTYMIDCAP100, NIFTYMIDCAP150, NIFTYSMLCAP100, NIFTY500, the sector
-# indexes, or CUSTOM for your own list in tickers.py. Every stock keeps the
-# tags of each index it belongs to, and you switch between them on the page.
+#
+# Everything listed here is scanned in ONE run, and every stock keeps the tag
+# of each index it belongs to. That is what lets the dashboard switch between
+# indexes instantly: the work is already done, the page just filters.
+#
+# Overlap is free. Nifty 500 already contains Nifty 50, Next 50, Nifty 100,
+# Nifty 200, all the midcap and smallcap indexes and Nifty Bank, so a stock in
+# eight of these lists is still downloaded exactly once. The only list below
+# that adds genuinely new stocks is Microcap 250 (ranks 501-750), so the real
+# cost is about 750 stocks, not the 2,000-odd you get by adding the counts up.
+#
+# To add sector indexes -- IT, Pharma, Auto, FMCG, Metal, Energy, Realty,
+# Infrastructure -- just append their keys. They cost close to nothing in time,
+# because their members are already inside Nifty 500 and so already fetched.
+# Full list of keys: universes.py.
 # ----------------------------------------------------------------------------
-UNIVERSES    = ["NIFTYMIDCAP100"]
+UNIVERSES    = [
+    # broad market
+    "NIFTY50", "NIFTYNEXT50", "NIFTY100", "NIFTY200", "NIFTY500",
+    # by size
+    "NIFTYMIDCAP50", "NIFTYMIDCAP100", "NIFTYMIDCAP150", "NIFTYMIDCAPSELECT",
+    "NIFTYSMLCAP50", "NIFTYSMLCAP100", "NIFTYSMLCAP250", "NIFTYMICROCAP250",
+    # banking
+    "NIFTYBANK",
+]
 BENCHMARK    = "^NSEI"  # Nifty 50 -- the trend line for comparative strength
 
 # ----------------------------------------------------------------------------
@@ -73,8 +93,16 @@ SWING_BARS   = 5        # bars either side that define a pivot low/high
 DIV_WINDOW   = 120      # how far back (trading days) to hunt for the two bottoms
 NEAR_PCT     = 20.0     # an armed setup further than this below its resistance
                         # is stale -- kept on the dashboard, left out of the e-mail
+ALERT_MAX    = 30       # most lines per section in the e-mail. Across ~750
+                        # stocks a full list would be unreadable; the dashboard
+                        # is where you go for everything.
 HISTORY      = "1y"     # history pulled per stock
-CHUNK        = 20       # stocks per yfinance request
+CHUNK        = 25       # stocks per yfinance request. Bigger means fewer
+                        # round-trips over ~750 stocks; too big and one refused
+                        # request loses a lot of names at once, so 25 is the
+                        # compromise. Failed chunks are retried per stock below.
+CHUNK_PAUSE  = 1.2      # seconds between chunks -- politeness, and it keeps
+                        # Yahoo from rate-limiting a long run
 IST          = timezone(timedelta(hours=5, minutes=30))
 
 
@@ -533,52 +561,94 @@ def fetch_benchmark() -> pd.Series:
         return None
 
 
+def _download_batch(pairs: list, frames: dict) -> list:
+    """Fetch one batch. Returns the symbols it could not get."""
+    missing = []
+    ytickers = [y for _, y in pairs]
+    data = None
+    for attempt in range(3):
+        try:
+            data = yf.download(
+                ytickers, period=HISTORY, interval="1d", group_by="ticker",
+                auto_adjust=False, threads=True, progress=False, timeout=30,
+            )
+            break
+        except Exception as exc:  # noqa: BLE001
+            print(f"  retry {attempt + 1}: {exc}", flush=True)
+            time.sleep(5 * (attempt + 1))
+
+    if data is None or data.empty:
+        return [sym for sym, _ in pairs]
+
+    for sym, yt in pairs:
+        try:
+            # With a single ticker yfinance returns plain columns, not a
+            # MultiIndex -- which is exactly the shape the rescue pass below
+            # produces, so handle both.
+            if isinstance(data.columns, pd.MultiIndex):
+                sub = data[yt] if yt in data.columns.get_level_values(0) else None
+            else:
+                sub = data
+            if sub is None:
+                missing.append(sym)
+                continue
+            sub = sub.dropna(how="all")
+            if sub.empty or sub["Close"].dropna().empty:
+                missing.append(sym)
+                continue
+            frames[sym] = sub
+        except Exception:  # noqa: BLE001
+            missing.append(sym)
+    return missing
+
+
 def fetch_frames(symbols: list) -> tuple:
+    """Two passes. The first goes in chunks, which is fast. The second retries
+    whatever the first pass lost, a few at a time -- because one refused
+    request should not cost you 25 stocks out of 750."""
     frames, missing = {}, []
     pairs = [(sym, yahoo_symbol(sym)) for sym in symbols]
+    lookup = dict(pairs)
 
     for start in range(0, len(pairs), CHUNK):
         batch = pairs[start : start + CHUNK]
-        ytickers = [y for _, y in batch]
         print(f"fetching {start + 1}-{start + len(batch)} of {len(pairs)}", flush=True)
-        data = None
-        for attempt in range(3):
-            try:
-                data = yf.download(
-                    ytickers, period=HISTORY, interval="1d", group_by="ticker",
-                    auto_adjust=False, threads=True, progress=False, timeout=30,
-                )
-                break
-            except Exception as exc:  # noqa: BLE001
-                print(f"  retry {attempt + 1}: {exc}", flush=True)
-                time.sleep(5 * (attempt + 1))
-        if data is None or data.empty:
-            missing.extend(sym for sym, _ in batch)
-            continue
+        missing.extend(_download_batch(batch, frames))
+        time.sleep(CHUNK_PAUSE)
 
-        for sym, yt in batch:
-            try:
-                sub = data[yt] if isinstance(data.columns, pd.MultiIndex) else data
-                sub = sub.dropna(how="all")
-                if sub.empty or sub["Close"].dropna().empty:
-                    missing.append(sym)
-                    continue
-                frames[sym] = sub
-            except Exception:  # noqa: BLE001
-                missing.append(sym)
-        time.sleep(1)
+    if missing:
+        print(f"rescue pass: retrying {len(missing)} stock(s) in small batches",
+              flush=True)
+        retry, missing = sorted(set(missing)), []
+        for start in range(0, len(retry), 5):
+            small = [(s, lookup[s]) for s in retry[start : start + 5]]
+            missing.extend(_download_batch(small, frames))
+            time.sleep(CHUNK_PAUSE)
+        if missing:
+            print(f"  still no data for {len(missing)}: "
+                  f"{', '.join(sorted(missing)[:12])}"
+                  f"{' ...' if len(missing) > 12 else ''}", flush=True)
 
     return frames, missing
 
 
 def main() -> int:
-    print(f"building watchlist from {', '.join(UNIVERSES)}", flush=True)
+    print(f"building watchlist from {len(UNIVERSES)} universes", flush=True)
     watchlist, sources = build_watchlist(UNIVERSES)
     if not watchlist:
         print("No universe could be loaded -- leaving data.json untouched.", file=sys.stderr)
         return 1
     meta = {row["symbol"]: row for row in watchlist}
-    print(f"{len(watchlist)} stocks across {len(UNIVERSES)} universe(s)", flush=True)
+
+    for key in UNIVERSES:
+        s = sources.get(key, {})
+        print(f"  {s.get('label', key):<20} {s.get('count', 0):>4} stocks"
+              f"  ({s.get('source', '?')})", flush=True)
+    empty = [k for k in UNIVERSES if not sources.get(k, {}).get("count")]
+    if empty:
+        print(f"  !! no constituents for: {', '.join(empty)}", flush=True)
+    print(f"{len(watchlist)} unique stocks to fetch "
+          f"(overlap between indexes is downloaded once)", flush=True)
 
     bench = fetch_benchmark()
     frames, missing = fetch_frames([row["symbol"] for row in watchlist])
@@ -615,8 +685,10 @@ def main() -> int:
             "crsPeriod": CRS_PERIOD, "atrPctFloor": ATRPCT_FLOOR,
             "benchmark": "Nifty 50", "hasBenchmark": bench is not None,
         },
+        "universeGroups": [{"key": g, "label": lbl} for g, lbl in UNIVERSE_GROUPS],
         "universes": [
             {"key": k, "label": UNIVERSE_CATALOGUE.get(k, {}).get("label", k),
+             "group": UNIVERSE_CATALOGUE.get(k, {}).get("group", "other"),
              "count": sources.get(k, {}).get("count", 0),
              "source": sources.get(k, {}).get("source", "")}
             for k in UNIVERSES
@@ -626,23 +698,41 @@ def main() -> int:
         "missing": sorted(set(missing)),
         "rows": rows,
     }
+    # Compact separators, not indent=1. At ~750 stocks the pretty version is
+    # about 1.2 MB and this one about 800 KB, for identical content -- and the
+    # file is re-committed every trading day, so the saving compounds.
     with open("data.json", "w", encoding="utf-8") as fh:
-        json.dump(payload, fh, indent=1)
+        json.dump(payload, fh, separators=(",", ":"))
 
     triggered = [r for r in rows if r["status"] == "triggered"]
     armed = [r for r in rows if r["status"] == "armed"]
+
+    # Which index to name for a stock that sits in eight of them. The smallest
+    # one it belongs to is the most informative: "Nifty 50" tells you more than
+    # "Nifty 500", and "Nifty Bank" more than either.
+    sizes = {k: (sources.get(k, {}).get("count") or 10 ** 6) for k in UNIVERSES}
+
+    def tag_of(r) -> str:
+        tags = [t for t in (r.get("universes") or []) if t in sizes]
+        if not tags:
+            return ""
+        best = min(tags, key=lambda t: sizes[t])
+        return UNIVERSE_CATALOGUE.get(best, {}).get("label", best)
 
     lines = [f"# Midcap Reversal Desk -- {as_of}", ""]
     if triggered:
         lines.append(f"## Triggered ({len(triggered)})")
         lines.append("Divergence confirmed and price has cleared the resistance.")
         lines.append("")
-        for r in triggered:
+        for r in triggered[:ALERT_MAX]:
             lines.append(
-                f"- **{r['symbol']}** ({r['name']}) at Rs {r['price']:,} -- "
+                f"- **{r['symbol']}** ({r['name']}, {tag_of(r)}) at Rs {r['price']:,} -- "
                 f"broke {r['resistance']:,}, RSI {r['rsi']}, stop {r['stop']:,}, "
                 f"qty {r['qty']}"
             )
+        if len(triggered) > ALERT_MAX:
+            lines.append(f"- _...and {len(triggered) - ALERT_MAX} more "
+                         f"-- see the dashboard._")
         lines.append("")
     near = sorted(
         (r for r in armed
@@ -653,11 +743,14 @@ def main() -> int:
         lines.append(f"## Armed and within {NEAR_PCT:.0f}% of the trigger ({len(near)})")
         lines.append("Divergence confirmed, closest to the resistance break first.")
         lines.append("")
-        for r in near[:25]:
+        for r in near[:ALERT_MAX]:
             lines.append(
-                f"- **{r['symbol']}** at Rs {r['price']:,} -- needs "
+                f"- **{r['symbol']}** ({tag_of(r)}) at Rs {r['price']:,} -- needs "
                 f"{r['distancePct']}% to clear {r['resistance']:,} (RSI {r['rsi']})"
             )
+        if len(near) > ALERT_MAX:
+            lines.append(f"- _...and {len(near) - ALERT_MAX} more within "
+                         f"{NEAR_PCT:.0f}%._")
         lines.append("")
     far = len(armed) - len(near)
     if far > 0:
@@ -667,8 +760,11 @@ def main() -> int:
     if not triggered and not armed:
         lines.append("No divergence setups today.")
     if missing:
+        miss = sorted(set(missing))
+        shown = ", ".join(miss[:20])
+        more = f" and {len(miss) - 20} more" if len(miss) > 20 else ""
         lines.append("")
-        lines.append(f"_No data for: {', '.join(sorted(set(missing)))}_")
+        lines.append(f"_No data for: {shown}{more}_")
 
     with open("alerts.md", "w", encoding="utf-8") as fh:
         fh.write("\n".join(lines))
