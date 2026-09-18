@@ -74,6 +74,8 @@ input{font:inherit; color:inherit}
 .rr{font-family:var(--mono); font-variant-numeric:tabular-nums}
 .rr.poor{color:var(--faint)}
 .tcard .v.thin{color:var(--faint)}
+.tcard .sym{display:flex; align-items:center; gap:2px}
+.tcard .symrow{display:flex; align-items:center; gap:4px; flex-wrap:wrap}
 .rrfix{font-family:var(--mono); font-size:14px; color:var(--muted)}
 tr.row.poorrr td:not(:first-child){opacity:.55}
 .mcard.poorrr{opacity:.62}
@@ -105,6 +107,8 @@ tr.row.poorrr td:not(:first-child){opacity:.55}
 .starbanner{margin-top:12px; padding:11px 14px; border:1px solid var(--brass-line);
   background:var(--brass-soft); border-radius:4px; font-size:14px}
 .starbanner b{color:var(--brass)}
+.bypass{margin-top:12px; padding:9px 13px; border:1px dashed var(--line);
+  border-radius:4px; font-size:13px; color:var(--muted)}
 .tfnote{font-size:12px; color:var(--faint); font-family:var(--mono)}
 .chip .n{font-family:var(--mono); font-size:11px; opacity:.75; margin-left:5px}
 .riskbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px 26px; margin-top:12px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:4px}
@@ -377,6 +381,7 @@ footer b{color:var(--muted); font-weight:600}
   </header>
 
   <div id="demoZone"></div>
+  <div id="bypassTop"></div>
   <div id="starBanner"></div>
 
   <section class="unibar" id="unibar">
@@ -482,7 +487,7 @@ footer b{color:var(--muted); font-weight:600}
       <button class="chip" data-f="goodrr" aria-pressed="false">Meets R:R</button>
       <button class="chip" data-f="starred" aria-pressed="false">★ My watchlist</button>
     </div>
-    <input class="search" id="search" type="search" placeholder="Filter symbol or name" autocomplete="off">
+    <input class="search" id="search" type="search" placeholder="Search any scanned stock by symbol or name" autocomplete="off">
     <select class="sel" id="sort">
       <option value="state">Sort: signal state</option>
       <option value="weight">Sort: turnover</option>
@@ -518,6 +523,7 @@ footer b{color:var(--muted); font-weight:600}
   <footer>
     <div><b>Data</b> is end-of-day from Yahoo Finance, refreshed by a scheduled scan after the NSE close. RSI and ATR are Wilder's, the same definitions your charting platform plots. Levels you override and notes you write are stored in this browser only.</div>
     <div>This is a rules engine for a strategy you defined, not investment advice, and it knows nothing about your circumstances. Confirm every level on your own chart before placing an order.</div>
+    <div id="bypassNote"></div>
     <div id="missingNote"></div>
     <div id="btZone"></div>
   </footer>
@@ -531,6 +537,7 @@ footer b{color:var(--muted); font-weight:600}
   var data = null, cfg = {totalRisk:100000, atrMult:1.5}, over = {};
   var filter='all', search='', sortBy='state', openRow=null;
   var uni='all', sector='', sel={momentum:false, strength:false, liquid:false};
+  var bypassed = false;   // search / watchlist showing the whole universe
   var poolRows = [];   // the chosen index, states recomputed, before the other filters
   var timeframe = 'daily';   // which candle size every number on the page refers to
   var starred = {};          // symbols you follow
@@ -737,11 +744,22 @@ footer b{color:var(--muted); font-weight:600}
         });
       }
     }
+    // Search and the watchlist are deliberate ESCAPE HATCHES: they ignore the
+    // index, sector, setup and selection filters entirely. Looking a stock up
+    // by name, or following one, is an explicit act -- and a stock with no
+    // pattern today is exactly the one you want to start watching. Filtering
+    // those out would mean you could never find it in order to star it.
     var q = search.trim().toLowerCase();
-    if(q) out = out.filter(function(r){ return r.symbol.toLowerCase().indexOf(q)>=0 || r.name.toLowerCase().indexOf(q)>=0; });
+    bypassed = !!q || filter === 'starred';
+    if(bypassed){
+      out = data.rows.filter(function(r){ return r.status !== 'nodata'; }).map(row);
+      if(q) out = out.filter(function(r){
+        return r.symbol.toLowerCase().indexOf(q) >= 0 ||
+               (r.name || '').toLowerCase().indexOf(q) >= 0; });
+      if(filter === 'starred') out = out.filter(function(r){ return isStar(r.symbol); });
+    }
     if(filter==='goodrr') out = out.filter(function(r){
       return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); });
-    else if(filter==='starred') out = out.filter(function(r){ return isStar(r.symbol); });
     else if(filter==='triggered') out = out.filter(function(r){ return r.state==='triggered'; });
     else if(filter==='armed') out = out.filter(function(r){ return r.state==='armed'||r.state==='triggered'; });
     else if(filter==='oversold') out = out.filter(function(r){ return r.rsi!=null && r.rsi<30; });
@@ -803,7 +821,12 @@ footer b{color:var(--muted); font-weight:600}
         : 'Needs <b>'+(r.dist!=null?r.dist.toFixed(1)+'%':'—')+'</b> to clear <b>'+(r.res!=null?INR.format(r.res):'—')+'</b>.';
       if(m) why += ' Price '+INR.format(m.lowA)+' → '+INR.format(m.lowB)+', RSI '+m.rsiA+' → '+m.rsiB+'.';
       return '<article class="tcard '+(r.state==='triggered'?'fire':'armed')+'">'+
-        '<div class="top"><div><div class="sym">'+esc(r.symbol)+'</div><div class="nm">'+esc(r.name)+'</div></div>'+pill(r)+'</div>'+
+        '<div class="top"><div><div class="symrow"><div class="sym">'+
+          '<button class="star'+(isStar(r.symbol)?' on':'')+'" data-star="'+esc(r.symbol)+
+          '" title="follow this stock" aria-pressed="'+isStar(r.symbol)+'">'+
+          (isStar(r.symbol)?'★':'☆')+'</button>'+
+          esc(r.symbol)+'</div>'+warnBadges(r.warningTypes)+'</div>'+
+          '<div class="nm">'+esc(r.name)+'</div></div>'+pill(r)+'</div>'+
         '<div class="grid">'+
           '<div><div class="k">Close</div><div class="v">'+money(r.price)+'</div></div>'+
           '<div><div class="k">Entry</div><div class="v">'+money(r.entry)+'</div></div>'+
@@ -1182,19 +1205,31 @@ footer b{color:var(--muted); font-weight:600}
   function renderStarBanner(){
     var names = Object.keys(starred);
     if(!names.length){ $('starBanner').innerHTML = ''; return; }
-    var hot = poolRows.filter(function(r){
-      return isStar(r.symbol) && (r.state === 'triggered' || r.state === 'armed'); });
-    if(!hot.length){
-      $('starBanner').innerHTML = '<div class="starbanner">Following <b>'+names.length+
-        '</b> stock'+(names.length>1?'s':'')+'. None of them is set up on '+
-        esc(tfLabel(timeframe).toLowerCase())+' candles right now.</div>';
-      return;
+    // Followed stocks are reported from the WHOLE universe, not the current
+    // index -- you followed the stock, not the index it happens to sit in.
+    var mine = (data.rows || [])
+      .filter(function(r){ return r.status !== 'nodata' && isStar(r.symbol); })
+      .map(row);
+    var hot = mine.filter(function(r){ return r.state === 'triggered' || r.state === 'armed'; });
+    var idle = mine.filter(function(r){ return hot.indexOf(r) < 0; });
+    var gone = names.filter(function(n){
+      return !mine.some(function(r){ return r.symbol === n; }); });
+
+    var parts = [];
+    if(hot.length){
+      parts.push('<b>' + hot.map(function(r){
+        return esc(r.symbol) + ' (' + r.state +
+          (r.rr != null ? ', ' + rrText(r.rr) : '') + ')'; }).join(', ') + '</b>');
     }
-    var fired = hot.filter(function(r){ return r.state === 'triggered'; });
-    $('starBanner').innerHTML = '<div class="starbanner">On your watchlist: <b>'+
-      hot.map(function(r){ return esc(r.symbol) + (r.state==='triggered' ? ' (triggered)' : ''); }).join(', ')+
-      '</b>'+(fired.length ? ' \u2014 '+fired.length+' past the entry.' : ' \u2014 armed, waiting on the break.')+
-      '</div>';
+    var tail = [];
+    if(idle.length) tail.push(idle.length + ' quiet');
+    if(gone.length) tail.push(gone.length + ' not in the scanned universe');
+
+    $('starBanner').innerHTML = '<div class="starbanner">' +
+      (hot.length ? 'Set up now on ' + esc(tfLabel(timeframe).toLowerCase()) + ' candles: ' + parts.join('')
+                  : 'Following <b>' + names.length + '</b> stock' + (names.length > 1 ? 's' : '') +
+                    ' \u2014 none set up on ' + esc(tfLabel(timeframe).toLowerCase()) + ' candles right now') +
+      (tail.length ? ' \u00b7 ' + tail.join(', ') : '') + '.</div>';
   }
 
   // Copy the followed symbols in the shape watchlist.txt wants, so the daily
@@ -1290,6 +1325,14 @@ footer b{color:var(--muted); font-weight:600}
     cards(list);
     renderStarBanner();
     renderBacktest();
+    var bmsg = bypassed
+      ? ('<div class="bypass">Showing every match across all ' +
+         (data.rows || []).filter(function(r){ return r.status !== 'nodata'; }).length +
+         ' scanned stocks \u2014 index, sector, setup and selection filters are ignored here, ' +
+         'so you can find a stock that has no pattern today and still follow it.</div>')
+      : '';
+    $('bypassTop').innerHTML = bmsg;
+    $('bypassNote').innerHTML = '';
     var tfMeta = tfList().filter(function(t){ return t.key === timeframe; })[0] || {};
     $('asOf').textContent = tfMeta.lastBar || data.asOf || '—';
     $('closeLabel').textContent = (timeframe === 'daily') ? 'Close' : (tfLabel(timeframe) + ' close');
@@ -1333,7 +1376,8 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="l"><div class="symcell"><span class="tick">'+
           '<button class="star'+(isStar(r.symbol)?' on':'')+'" data-star="'+esc(r.symbol)+
           '" title="follow this stock" aria-pressed="'+isStar(r.symbol)+'">'+(isStar(r.symbol)?'★':'☆')+'</button>'+
-          esc(r.symbol)+warnBadges(r.warningTypes)+'</span><span class="co">'+esc(r.name)+'</span></div></td>'+
+          esc(r.symbol)+'</span>'+warnBadges(r.warningTypes)+
+          '<span class="co">'+esc(r.name)+'</span></div></td>'+
         '<td class="num">'+(r.price!=null?INR.format(r.price):'—')+'</td>'+
         '<td><span class="rsi"><span class="v">'+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+meter(r.rsi)+'</span></td>'+
         '<td>'+setupBadges(r.setupTypes, r.agree)+'</td>'+
