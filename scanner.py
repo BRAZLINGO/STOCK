@@ -1441,7 +1441,7 @@ def main() -> int:
             "atrMult": ATR_MULT, "totalRisk": TOTAL_RISK,
             "rptDivisor": RPT_DIVISOR, "swingBars": SWING_BARS,
             "divWindow": DIV_WINDOW, "rrTargets": RR_TARGETS,
-            "setups": SETUPS, "freshBars": FRESH_BARS,
+            "setups": SETUPS, "warnings": WARNINGS, "freshBars": FRESH_BARS,
             "levelMinTouches": LEVEL_MIN_TOUCHES, "primaryRule": PRIMARY_RULE,
             "crsPeriod": CRS_PERIOD, "atrPctFloor": ATRPCT_FLOOR,
             "benchmark": "Nifty 50", "hasBenchmark": bench is not None,

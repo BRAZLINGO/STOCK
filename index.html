@@ -556,6 +556,14 @@ footer b{color:var(--muted); font-weight:600}
     try{
       var raw = localStorage.getItem(KEY);
       if(raw){ var s = JSON.parse(raw); cfg = Object.assign(cfg, s.cfg||{}); over = s.over||{}; sel = Object.assign(sel, s.sel||{}); picked = s.picked||[];
+        // Selections saved before the chips were merged hold raw pattern
+        // names ("doublebottom"); map them onto their family so an old
+        // browser does not open with a filter that matches nothing.
+        picked = picked.map(function(p){
+          for(var i=0;i<SETUP_FAMILIES.length;i++)
+            if(SETUP_FAMILIES[i].members.indexOf(p) >= 0) return SETUP_FAMILIES[i].key;
+          return p;
+        }).filter(function(p, i, a){ return a.indexOf(p) === i && familyOf(p); });
         if(typeof s.uni === 'string') uni = s.uni;
         if(typeof s.sector === 'string') sector = s.sector;
         if(typeof s.timeframe === 'string') timeframe = s.timeframe;
@@ -731,16 +739,14 @@ footer b{color:var(--muted); font-weight:600}
     agreeMode = 'all';
     if(picked.length){
       var every = out.filter(function(r){
-        var t = r.setupTypes || [];
-        return picked.every(function(p){ return t.indexOf(p) >= 0; });
+        return picked.every(function(p){ return inFamily(r, p); });
       });
       if(every.length || picked.length === 1){
         out = every;
       } else {
         agreeMode = 'any';
         out = out.filter(function(r){
-          var t = r.setupTypes || [];
-          return picked.some(function(p){ return t.indexOf(p) >= 0; });
+          return picked.some(function(p){ return inFamily(r, p); });
         });
       }
     }
@@ -943,6 +949,45 @@ footer b{color:var(--muted); font-weight:600}
     doubletop:   {label:'Double top', short:'DT'},
     hs:          {label:'Head & shoulders', short:'H&S'}
   };
+  // A pattern and its mirror image are one idea, so they share a chip.
+  // Picking "Double top / bottom" finds both the W and the M -- one is an
+  // entry, the other a warning, and you want to know about either.
+  var SETUP_FAMILIES = [
+    {key:'divergence',   label:'RSI divergence',           short:'DIV',  members:['divergence']},
+    {key:'engulfing',    label:'Bullish engulfing',        short:'ENG',  members:['engulfing']},
+    {key:'tweezer',      label:'Tweezer bottom',           short:'TWZ',  members:['tweezer']},
+    {key:'double',       label:'Double top / bottom',      short:'DB/DT',members:['doublebottom','doubletop']},
+    {key:'headshoulders',label:'Head & shoulders / reverse',short:'H&S', members:['invhs','hs']}
+  ];
+  function familyOf(key){
+    for(var i=0;i<SETUP_FAMILIES.length;i++) if(SETUP_FAMILIES[i].key===key) return SETUP_FAMILIES[i];
+    return null;
+  }
+  // Families the current data actually contains, so a chip never appears for a
+  // pattern this scan was not configured to look for.
+  function availableFamilies(){
+    var have = {};
+    ((data && data.settings && data.settings.setups) || []).forEach(function(t){ have[t]=1; });
+    ((data && data.settings && data.settings.warnings) || []).forEach(function(t){ have[t]=1; });
+    // An older data.json lists no warnings; fall back to whatever the rows show.
+    if(data && data.rows) data.rows.forEach(function(r){
+      var v = (r.tf && r.tf[timeframe]) || r;
+      (v.setupTypes||[]).forEach(function(t){ have[t]=1; });
+      (v.warningTypes||[]).forEach(function(t){ have[t]=1; });
+    });
+    return SETUP_FAMILIES.filter(function(f){
+      return f.members.some(function(m){ return have[m]; }); });
+  }
+  // Does this row show any member of the family, in either direction?
+  function inFamily(r, key){
+    var f = familyOf(key);
+    if(!f) return (r.setupTypes||[]).indexOf(key) >= 0;
+    var mine = (r.setupTypes||[]).concat(r.warningTypes||[]);
+    return f.members.some(function(m){ return mine.indexOf(m) >= 0; });
+  }
+  function famLabel(k){ var f=familyOf(k); return f ? f.label : setupLabel(k); }
+  function famShort(k){ var f=familyOf(k); return f ? f.short : setupShort(k); }
+
   function setupLabel(t){ return (SETUP_META[t]||{}).label || t; }
   function setupShort(t){ return (SETUP_META[t]||{}).short || (t||'').slice(0,3).toUpperCase(); }
   // A setup that also prints on another candle size carries a small marker.
@@ -1093,19 +1138,24 @@ footer b{color:var(--muted); font-weight:600}
          : live ? live+' of '+list.length+' live from NSE, rest cached'
          : 'NSE unreachable — using the cached list')
       : '';
-    var avail = (data.settings && data.settings.setups) || ['divergence','engulfing','tweezer'];
+    var fams = availableFamilies();
     var counts = {};
-    (data.rows||[]).forEach(function(r){
-      (r.setupTypes||[]).forEach(function(t){ counts[t] = (counts[t]||0) + 1; });
+    (data.rows||[]).forEach(function(r0){
+      var v = (r0.tf && r0.tf[timeframe]) || r0;
+      fams.forEach(function(f){ if(inFamily(v, f.key)) counts[f.key] = (counts[f.key]||0) + 1; });
     });
-    $('setupChips').innerHTML = avail.map(function(t){
-      return '<button class="chip" data-setup="'+esc(t)+'" aria-pressed="'+(picked.indexOf(t)>=0)+'">'+
-        esc(setupLabel(t))+'<span class="n">'+(counts[t]||0)+'</span></button>';
+    $('setupChips').innerHTML = fams.map(function(f){
+      var both = f.members.length > 1
+        ? ' title="matches either direction: ' +
+          esc(f.members.map(setupLabel).join(' or ')) + '"' : '';
+      return '<button class="chip" data-setup="'+esc(f.key)+'" aria-pressed="'+
+        (picked.indexOf(f.key)>=0)+'"'+both+'>'+esc(f.label)+
+        '<span class="n">'+(counts[f.key]||0)+'</span></button>';
     }).join('');
     var uniName = (uni === 'all') ? (list.length>1 ? 'All indexes' : uniLabel((data.universes[0]||{}).key)) : uniLabel(uni);
     if(data.universes && data.universes.length === 1) uniName = data.universes[0].label;
     var bits = [uniName, tfLabel(timeframe).toLowerCase() + ' candles'];
-    bits.push(picked.length ? picked.map(setupShort).join('+') : 'all setups');
+    bits.push(picked.length ? picked.map(famShort).join('+') : 'all setups');
     if(sector) bits.push(sector);
     var onFilters = ['momentum','strength','liquid'].filter(function(k){ return sel[k]; }).length;
     if(onFilters) bits.push(onFilters + ' filter' + (onFilters>1?'s':''));
