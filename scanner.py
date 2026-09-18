@@ -137,6 +137,15 @@ BT_SAMPLE     = 200     # stocks sampled. Five years x 200 names already gives
 BT_TARGET_R   = 2.0     # "success" = reached this multiple of risk
 BT_TRIGGER_BARS = 20    # bars allowed for the entry to trigger at all
 BT_HOLD_BARS  = 60      # bars allowed to reach the target before giving up
+
+# --- recent bars, for the trade journal -------------------------------------
+# The Dashboard needs to know whether a stop or a target was actually TOUCHED
+# on some day since you entered, not merely whether today's close is past it --
+# a stop hit on Tuesday and recovered by Friday is still a stop hit. That needs
+# the daily highs and lows, so the scan publishes the last few weeks of them.
+# The dates are shared across every stock, which is what keeps this affordable:
+# per stock it is three numbers a day, not a date string as well.
+BAR_HISTORY  = 25      # five trading weeks: enough to review recent trades
 FRESH_BARS   = 5        # a candlestick setup goes stale after this many sessions
 TREND_BARS   = 10       # sessions of decline that count as "a downtrend before it"
 TWEEZER_TOL_ATR = 0.15  # how equal two lows must be, as a fraction of ATR
@@ -1194,7 +1203,7 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         "setupTypes": sorted({s["type"] for s in setups}),
         "primary": primary["type"] if primary else None,
         "resTouches": res_touches,
-        "levels": levels[:6],
+        "levels": levels[:4],
         "asOf": as_of,
         "price": round(last_price, 2),
         "changePct": round((last_price / prev_price - 1) * 100, 2) if prev_price else None,
@@ -1250,6 +1259,13 @@ def build_record(symbol: str, name: str, meta: dict, daily: pd.DataFrame,
     # years. Neither is a property of the candle size.
     for k in STOCK_FIELDS:
         rec[k] = base.get(k)
+
+    # Recent daily bars for the journal: [high, low, close] per session,
+    # aligned to the payload's shared date axis.
+    tail = daily.tail(BAR_HISTORY)
+    rec["barDates"] = [d.strftime("%Y-%m-%d") for d in tail.index]
+    rec["bars"] = [[round(float(h), 2), round(float(l), 2), round(float(c), 2)]
+                   for h, l, c in zip(tail["High"], tail["Low"], tail["Close"])]
 
     rec["tf"] = {}
     last_daily = daily.index[-1].strftime("%Y-%m-%d") if len(daily) else None
@@ -1411,6 +1427,19 @@ def main() -> int:
             print(f"  {sym}: {exc}", flush=True)
             missing.append(sym)
 
+    # One date axis for everyone. Stocks that missed a session get a null in
+    # that slot, so a row's bars always line up with the axis by index.
+    axis = sorted({d for r in rows for d in (r.get("barDates") or [])})[-BAR_HISTORY:]
+    slot = {d: i for i, d in enumerate(axis)}
+    for r in rows:
+        dates, bars = r.pop("barDates", None) or [], r.get("bars") or []
+        packed = [None] * len(axis)
+        for d, bar in zip(dates, bars):
+            i = slot.get(d)
+            if i is not None:
+                packed[i] = bar
+        r["bars"] = packed
+
     backtest = None
     if BACKTEST:
         # Evenly spaced across the watchlist so the sample spans large, mid,
@@ -1448,6 +1477,7 @@ def main() -> int:
         },
         "backtest": backtest,
         "minRR": MIN_RR,
+        "barDates": axis,
         "baseTimeframe": BASE_TF,
         "timeframes": [
             {"key": tf, "label": TF_LABEL.get(tf, tf),

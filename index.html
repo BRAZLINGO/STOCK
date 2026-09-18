@@ -80,6 +80,60 @@ input{font:inherit; color:inherit}
 .showrow{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap}
 .andnote{font-size:12px; color:var(--faint); font-family:var(--mono)}
 body.no-target .col-target{display:none}
+
+/* --- two views ----------------------------------------------------------- */
+.brand{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap}
+.brand .tab{color:var(--faint); text-decoration:none; transition:color .12s}
+.brand .tab:hover{color:var(--muted)}
+.brand .tab.on{color:var(--ink)}
+.slash2{color:var(--line); font-weight:400}
+
+/* --- dashboard ----------------------------------------------------------- */
+.dashgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-top:18px}
+.stat{border:1px solid var(--line); border-radius:4px; padding:13px 15px; background:var(--surface)}
+.stat .k{font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.stat .v{font-family:var(--mono); font-size:21px; margin-top:5px; font-variant-numeric:tabular-nums}
+.stat .v.up{color:var(--sprout)} .stat .v.down{color:#b3261e}
+.stat .sub{font-size:12px; color:var(--muted); margin-top:3px}
+.stat.wide{grid-column:1/-1}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .stat .v.down{color:#ff8a80}}
+
+.tradebox{margin-top:22px; border:1px solid var(--line); border-radius:4px; background:var(--surface); padding:14px 16px}
+.tradehead{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px}
+.tradeacts{margin-left:auto; display:flex; gap:7px; flex-wrap:wrap}
+.tform{display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px;
+  padding:13px; border:1px dashed var(--brass-line); border-radius:4px; margin-bottom:13px; background:var(--surface-2)}
+.tform label{display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--muted)}
+.tform input,.tform select{font-family:var(--mono); font-size:14px; padding:7px 8px; min-height:38px;
+  background:var(--surface); border:1px solid var(--line); border-radius:3px; color:var(--ink)}
+.tform .acts{grid-column:1/-1; display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+.tform .hint{font-size:12px; color:var(--faint); grid-column:1/-1}
+
+.trow{display:grid; grid-template-columns:1.3fr repeat(5,1fr) auto; gap:10px; align-items:center;
+  padding:11px 0; border-top:1px solid var(--line-soft); font-size:14px}
+.trow.head{border-top:0; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.trow .n{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.trow .pl.up{color:var(--sprout)} .trow .pl.down{color:#b3261e}
+.trow .sym{font-weight:600}
+.trow .lbl{display:none}   /* phone-only field labels */
+.trow .co{font-size:12px; color:var(--faint); display:block; white-space:nowrap}
+.tstate{font-size:11px; padding:1px 6px; border-radius:2px; border:1px solid var(--line); color:var(--muted)}
+.tstate.open{border-color:var(--brass-line); color:var(--brass)}
+.suggest{border:1px solid var(--brass-line); background:var(--brass-soft); border-radius:4px;
+  padding:11px 13px; margin-bottom:12px; font-size:14px}
+.suggest b{color:var(--brass)}
+.suggest .acts{margin-top:8px; display:flex; gap:7px; flex-wrap:wrap}
+.wkrow{display:grid; grid-template-columns:1.2fr repeat(4,1fr); gap:10px; padding:9px 0;
+  border-top:1px solid var(--line-soft); font-size:14px}
+.wkrow.head{border-top:0; font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--faint); font-weight:600}
+.wkrow .n{font-family:var(--mono); font-variant-numeric:tabular-nums}
+@media (max-width:700px){
+  .trow{grid-template-columns:1fr 1fr 1fr; gap:6px 10px}
+  .trow.head{display:none}
+  .trow .lbl{display:block; font-size:10px; letter-spacing:.05em; text-transform:uppercase; color:var(--faint)}
+  .trow .sym{grid-column:1/-1}
+  .wkrow{grid-template-columns:1fr 1fr 1fr}
+}
 tr.row.poorrr td:not(:first-child){opacity:.55}
 .mcard.poorrr{opacity:.62}
 .rrflag{font-family:var(--sans); font-size:10px; color:var(--faint); border:1px solid var(--line);
@@ -371,7 +425,8 @@ footer b{color:var(--muted); font-weight:600}
 
   <header class="mast">
     <div>
-      <h1>Midcap Reversal Desk</h1>
+      <h1 class="brand"><a href="#desk" class="tab" id="tabDesk">Midcap Reversal Desk</a><span
+        class="slash2">/</span><a href="#dashboard" class="tab" id="tabDash">Dashboard</a></h1>
       <p class="sub">Bullish RSI divergences across the index and candle size you choose, scanned nightly on real NSE data and sized by the risk-per-trade rule.</p>
       <p id="formingNote"></p>
     </div>
@@ -383,6 +438,7 @@ footer b{color:var(--muted); font-weight:600}
     </div>
   </header>
 
+  <div id="viewDesk">
   <div id="demoZone"></div>
   <div id="bypassTop"></div>
   <div id="starBanner"></div>
@@ -526,6 +582,30 @@ footer b{color:var(--muted); font-weight:600}
 
   <div class="moreWrap" id="moreWrap" hidden>
     <button class="btn ghost" id="moreBtn">Show more</button>
+  </div>
+
+  </div><!-- /viewDesk -->
+
+  <div id="viewDash" hidden>
+    <div class="dashgrid" id="dashStats"></div>
+
+    <div class="tradebox">
+      <div class="tradehead">
+        <span class="eyebrow">Positions</span>
+        <span class="formula" id="tradeCount"></span>
+        <div class="tradeacts">
+          <button class="chip" id="addTrade">+ Add a trade</button>
+          <button class="chip" id="expJournal">Backup</button>
+          <button class="chip" id="impJournal">Restore</button>
+          <input type="file" id="impFile" accept=".json,application/json" hidden>
+        </div>
+      </div>
+      <div id="tradeForm" hidden></div>
+      <div id="closeSuggest"></div>
+      <div id="tradeList"></div>
+    </div>
+
+    <div class="tradebox" id="weeklyBox"></div>
   </div>
 
   <footer>
@@ -1570,10 +1650,369 @@ footer b{color:var(--muted); font-weight:600}
   if(cfg.maxDeploy) $('maxDeploy').value = cfg.maxDeploy;
   render();
 
+
+  // ==========================================================================
+  // DASHBOARD -- your own trades, not the scanner's opinions.
+  // ==========================================================================
+  var trades = [];
+  var view = 'desk';
+  var editing = null;      // id being edited, or 'new'
+  var dismissed = {};      // suggested closes you have waved away
+
+  function tradeKey(){ return KEY + ':trades'; }
+  function loadTrades(){
+    try{ var raw = localStorage.getItem(tradeKey());
+      if(raw){ var j = JSON.parse(raw); trades = j.trades || []; dismissed = j.dismissed || {}; }
+    }catch(e){ trades = []; }
+  }
+  function saveTrades(){
+    try{ localStorage.setItem(tradeKey(), JSON.stringify({trades:trades, dismissed:dismissed, v:1})); }catch(e){}
+  }
+
+  function today(){ var d = new Date(); return d.toISOString().slice(0,10); }
+  function rowFor(sym){
+    if(!data || !data.rows) return null;
+    for(var i=0;i<data.rows.length;i++) if(data.rows[i].symbol === sym) return data.rows[i];
+    return null;
+  }
+  function lastClose(sym){
+    var r = rowFor(sym); if(!r) return null;
+    var v = (r.tf && r.tf[data.baseTimeframe || 'daily']) || r;
+    return v.price != null ? v.price : null;
+  }
+
+  // --- did the stop or the target actually get touched? --------------------
+  // Walks the published daily bars from the entry date forward. A stop hit on
+  // Tuesday and recovered by Friday is still a stop hit, which is exactly what
+  // comparing against the latest close alone would miss.
+  function detectClose(t){
+    if(t.exit) return null;
+    var r = rowFor(t.symbol);
+    var axis = (data && data.barDates) || [];
+    if(!r || !r.bars || !axis.length) return null;
+    for(var i=0;i<axis.length;i++){
+      if(axis[i] < t.date) continue;              // before you were in
+      var bar = r.bars[i];
+      if(!bar) continue;
+      var hi = bar[0], lo = bar[1];
+      // Both touched on one day: call it a loss. Without intraday data there
+      // is no way to know which came first, and guessing the happy answer
+      // would flatter every number on this page.
+      if(t.stop != null && lo <= t.stop)
+        return {price:t.stop, date:axis[i], reason:'stop hit'};
+      if(t.target != null && hi >= t.target)
+        return {price:t.target, date:axis[i], reason:'target reached'};
+    }
+    return null;
+  }
+
+  function tradePL(t){
+    var out = t.exit ? t.exit.price : lastClose(t.symbol);
+    if(out == null || t.entry == null || !t.qty) return null;
+    return (out - t.entry) * t.qty;
+  }
+  function tradeR(t){
+    var risk = (t.entry != null && t.stop != null) ? (t.entry - t.stop) : null;
+    if(!risk || risk <= 0 || !t.qty) return null;
+    var pl = tradePL(t); if(pl == null) return null;
+    return pl / (risk * t.qty);
+  }
+
+  function metrics(){
+    var closed = trades.filter(function(t){ return t.exit; });
+    var open = trades.filter(function(t){ return !t.exit; });
+    var wins = closed.filter(function(t){ return (tradePL(t)||0) > 0; });
+    var losses = closed.filter(function(t){ return (tradePL(t)||0) <= 0; });
+    var gp = wins.reduce(function(a,t){ return a + (tradePL(t)||0); }, 0);
+    var gl = losses.reduce(function(a,t){ return a + Math.abs(tradePL(t)||0); }, 0);
+    var avgWin = wins.length ? gp / wins.length : 0;
+    var avgLoss = losses.length ? gl / losses.length : 0;
+    // Breakeven hit rate at YOUR actual average win and loss. This is the line
+    // the win rate has to clear; on its own a win rate means nothing.
+    var required = (avgWin + avgLoss) > 0 ? avgLoss / (avgWin + avgLoss) * 100 : null;
+    var rs = closed.map(tradeR).filter(function(v){ return v != null; });
+    var expectancy = rs.length ? rs.reduce(function(a,b){ return a+b; }, 0) / rs.length : null;
+    return {
+      closed:closed, open:open, wins:wins.length, losses:losses.length,
+      grossProfit:gp, grossLoss:gl, net:gp - gl,
+      winRate: closed.length ? wins.length / closed.length * 100 : null,
+      required: required, avgWin:avgWin, avgLoss:avgLoss,
+      expectancy: expectancy,
+      openPL: open.reduce(function(a,t){ return a + (tradePL(t)||0); }, 0),
+      openRisk: open.reduce(function(a,t){
+        var risk = (t.entry != null && t.stop != null) ? (t.entry - t.stop) : 0;
+        return a + Math.max(risk, 0) * (t.qty||0); }, 0),
+      deployed: open.reduce(function(a,t){ return a + (t.entry||0) * (t.qty||0); }, 0)
+    };
+  }
+
+  function money0(v){ return (v==null||!isFinite(v)) ? '—' : (v<0?'-':'')+'₹'+INR0.format(Math.abs(Math.round(v))); }
+
+  function renderDash(){
+    if(!$('viewDash')) return;
+    var m = metrics();
+    var ahead = (m.winRate != null && m.required != null) ? m.winRate - m.required : null;
+    var cards = [
+      {k:'Net result', v:money0(m.net), cls:(m.net>0?'up':m.net<0?'down':''),
+       sub:m.closed.length + ' closed trade' + (m.closed.length===1?'':'s')},
+      {k:'Earnings', v:money0(m.grossProfit), cls:'up', sub:m.wins + ' winner' + (m.wins===1?'':'s')},
+      {k:'Losses', v:money0(m.grossLoss), cls:'down', sub:m.losses + ' loser' + (m.losses===1?'':'s')},
+      {k:'Win rate', v:(m.winRate!=null?m.winRate.toFixed(0)+'%':'—'),
+       cls:(ahead!=null?(ahead>0?'up':'down'):''),
+       sub:(m.required!=null ? 'you need '+m.required.toFixed(0)+'% to break even' : 'no closed trades yet')},
+      {k:'Expectancy', v:(m.expectancy!=null?(m.expectancy>0?'+':'')+m.expectancy.toFixed(2)+'R':'—'),
+       cls:(m.expectancy!=null?(m.expectancy>0?'up':'down'):''),
+       sub:(m.expectancy!=null ? money0(m.expectancy * (cfg.totalRisk/50)) + ' per trade at your risk' : 'per trade, in units of risk')},
+      {k:'Open positions', v:String(m.open.length),
+       sub:money0(m.deployed)+' deployed · '+money0(m.openRisk)+' at risk'}
+    ];
+    if(m.open.length){
+      cards.push({k:'Open profit / loss', v:money0(m.openPL),
+        cls:(m.openPL>0?'up':m.openPL<0?'down':''), sub:'at the latest close, not booked'});
+    }
+    if(ahead != null){
+      cards.push({k:'Verdict', cls:(ahead>0?'up':'down'), wide:true,
+        v:(ahead>0?'Ahead by ':'Behind by ')+Math.abs(ahead).toFixed(0)+' points',
+        sub:'You win '+m.winRate.toFixed(0)+'% and need '+m.required.toFixed(0)+'% at your average '+
+            money0(m.avgWin)+' win against your average '+money0(m.avgLoss)+' loss.'+
+            (m.closed.length < 20 ? ' Fewer than 20 trades — treat this as a hint, not a verdict.' : '')});
+    }
+    $('dashStats').innerHTML = cards.map(function(c){
+      return '<div class="stat'+(c.wide?' wide':'')+'"><div class="k">'+esc(c.k)+'</div>'+
+        '<div class="v '+(c.cls||'')+'">'+esc(c.v)+'</div>'+
+        (c.sub?'<div class="sub">'+esc(c.sub)+'</div>':'')+'</div>';
+    }).join('');
+
+    renderSuggest();
+    renderTradeForm();
+    renderTradeList(m);
+    renderWeekly(m);
+  }
+
+  function renderSuggest(){
+    var hits = [];
+    trades.forEach(function(t){
+      if(t.exit || dismissed[t.id]) return;
+      var d = detectClose(t);
+      if(d) hits.push({t:t, d:d});
+    });
+    $('closeSuggest').innerHTML = hits.map(function(h){
+      var pl = (h.d.price - h.t.entry) * h.t.qty;
+      return '<div class="suggest"><b>'+esc(h.t.symbol)+'</b> — '+esc(h.d.reason)+' on '+esc(h.d.date)+
+        ' at '+INR.format(h.d.price)+', which would be '+money0(pl)+
+        '. Close it at that, or set your real fill.'+
+        '<div class="acts">'+
+          '<button class="chip" data-close="'+esc(h.t.id)+'">Close at '+INR.format(h.d.price)+'</button>'+
+          '<button class="chip" data-edit="'+esc(h.t.id)+'">Enter my fill</button>'+
+          '<button class="chip" data-dismiss="'+esc(h.t.id)+'">Not yet</button>'+
+        '</div></div>';
+    }).join('');
+  }
+
+  function renderTradeForm(){
+    var box = $('tradeForm');
+    if(!editing){ box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    var t = (editing === 'new') ? {symbol:'', entry:'', qty:'', stop:'', target:'', date:today(), note:''}
+                                : (trades.filter(function(x){ return x.id === editing; })[0] || {});
+    var isNew = editing === 'new';
+    function f(name, label, type, val, extra){
+      return '<label>'+esc(label)+'<input id="tf_'+name+'" type="'+type+'" value="'+
+        (val==null?'':esc(String(val)))+'" '+(extra||'')+'></label>';
+    }
+    box.innerHTML = '<div class="tform">'+
+      f('symbol','Symbol','text', t.symbol, 'list="symList" placeholder="e.g. BHARTIARTL" autocomplete="off"')+
+      f('date','Bought on','date', t.date)+
+      f('entry','Entry ₹','number', t.entry, 'step="0.05" min="0"')+
+      f('qty','Quantity','number', t.qty, 'step="1" min="1"')+
+      f('stop','Stop ₹','number', t.stop, 'step="0.05" min="0"')+
+      f('target','Target ₹','number', t.target, 'step="0.05" min="0"')+
+      (t.exit ? f('exitPrice','Exit ₹','number', t.exit.price, 'step="0.05" min="0"') +
+                f('exitDate','Sold on','date', t.exit.date) : '')+
+      '<label style="grid-column:1/-1">Note<input id="tf_note" type="text" value="'+
+        esc(t.note||'')+'" placeholder="why you took it"></label>'+
+      '<div class="hint" id="tf_fill"></div>'+
+      '<div class="acts">'+
+        '<button class="chip" id="tf_save">'+(isNew?'Add trade':'Save changes')+'</button>'+
+        '<button class="chip" id="tf_cancel">Cancel</button>'+
+        (isNew ? '' : '<button class="chip" id="tf_sell">Mark as sold today</button>'+
+                      '<button class="chip" id="tf_del">Delete</button>')+
+      '</div></div>'+
+      '<datalist id="symList">'+((data&&data.rows)||[]).slice(0,900).map(function(r){
+        return '<option value="'+esc(r.symbol)+'">'+esc(r.name)+'</option>'; }).join('')+'</datalist>';
+  }
+
+  function renderTradeList(m){
+    $('tradeCount').textContent = trades.length
+      ? m.open.length + ' open · ' + m.closed.length + ' closed'
+      : 'nothing recorded yet';
+    if(!trades.length){
+      $('tradeList').innerHTML = '<div class="empty">No trades yet. When you actually buy one of the '+
+        'triggered stocks, add it here — this page then tells you whether the system is working on '+
+        'your money rather than in backtest.</div>';
+      return;
+    }
+    var order = trades.slice().sort(function(a,b){
+      if(!!a.exit !== !!b.exit) return a.exit ? 1 : -1;
+      return (b.date||'').localeCompare(a.date||'');
+    });
+    $('tradeList').innerHTML =
+      '<div class="trow head"><span>Stock</span><span>Entry</span><span>Qty</span>'+
+      '<span>Stop</span><span>Now / Exit</span><span>P&amp;L</span><span></span></div>' +
+      order.map(function(t){
+        var pl = tradePL(t), r = tradeR(t);
+        var out = t.exit ? t.exit.price : lastClose(t.symbol);
+        return '<div class="trow">'+
+          '<span class="sym">'+esc(t.symbol)+
+            '<span class="co">'+esc(t.date||'')+(t.exit?' → '+esc(t.exit.date||''):'')+' · '+
+            '<span class="tstate'+(t.exit?'':' open')+'">'+(t.exit?esc(t.exit.reason||'closed'):'open')+'</span></span></span>'+
+          '<span class="n"><span class="lbl">Entry</span>'+(t.entry!=null?INR.format(t.entry):'—')+'</span>'+
+          '<span class="n"><span class="lbl">Qty</span>'+(t.qty||'—')+'</span>'+
+          '<span class="n"><span class="lbl">Stop</span>'+(t.stop!=null?INR.format(t.stop):'—')+'</span>'+
+          '<span class="n"><span class="lbl">'+(t.exit?'Exit':'Now')+'</span>'+(out!=null?INR.format(out):'—')+'</span>'+
+          '<span class="n pl '+(pl>0?'up':pl<0?'down':'')+'"><span class="lbl">P&amp;L</span>'+
+            money0(pl)+(r!=null?' <span class="co" style="display:inline">'+(r>0?'+':'')+r.toFixed(2)+'R</span>':'')+'</span>'+
+          '<span><button class="chip" data-edit="'+esc(t.id)+'">Edit</button></span>'+
+        '</div>';
+      }).join('');
+  }
+
+  function renderWeekly(m){
+    if(!m.closed.length){ $('weeklyBox').innerHTML = ''; return; }
+    var weeks = {};
+    m.closed.forEach(function(t){
+      var d = new Date((t.exit.date || t.date) + 'T00:00:00');
+      var day = (d.getDay() + 6) % 7;                 // Monday = 0
+      var mon = new Date(d); mon.setDate(d.getDate() - day);
+      var k = mon.toISOString().slice(0,10);
+      var w = weeks[k] || (weeks[k] = {k:k, n:0, win:0, net:0});
+      w.n++; if((tradePL(t)||0) > 0) w.win++; w.net += (tradePL(t)||0);
+    });
+    var list = Object.keys(weeks).sort().reverse().map(function(k){ return weeks[k]; });
+    var run = 0;
+    var totals = list.slice().reverse().map(function(w){ run += w.net; return {k:w.k, run:run}; });
+    var runMap = {}; totals.forEach(function(x){ runMap[x.k] = x.run; });
+    $('weeklyBox').innerHTML = '<div class="tradehead"><span class="eyebrow">Week by week</span>'+
+      '<span class="formula">closed trades, grouped by the week you sold</span></div>'+
+      '<div class="wkrow head"><span>Week of</span><span>Trades</span><span>Won</span>'+
+      '<span>Net</span><span>Running</span></div>'+
+      list.map(function(w){
+        return '<div class="wkrow"><span>'+esc(w.k)+'</span>'+
+          '<span class="n">'+w.n+'</span>'+
+          '<span class="n">'+w.win+' of '+w.n+'</span>'+
+          '<span class="n '+(w.net>0?'up':w.net<0?'down':'')+'">'+money0(w.net)+'</span>'+
+          '<span class="n">'+money0(runMap[w.k])+'</span></div>';
+      }).join('');
+  }
+
+  // --- routing --------------------------------------------------------------
+  function setView(v){
+    view = (v === 'dashboard') ? 'dashboard' : 'desk';
+    $('viewDesk').hidden = view !== 'desk';
+    $('viewDash').hidden = view !== 'dashboard';
+    $('tabDesk').classList.toggle('on', view === 'desk');
+    $('tabDash').classList.toggle('on', view === 'dashboard');
+    document.title = (view === 'dashboard' ? 'Dashboard' : 'Midcap Reversal Desk');
+    if(view === 'dashboard') renderDash();
+  }
+  window.addEventListener('hashchange', function(){
+    setView((location.hash || '').replace('#',''));
+  });
+
+  // --- journal actions ------------------------------------------------------
+  function num(id){ var v = parseFloat(($(id)||{}).value); return isFinite(v) ? v : null; }
+  document.addEventListener('click', function(e){
+    var b = e.target.closest ? e.target.closest('button') : null;
+    if(!b) return;
+    if(b.id === 'addTrade'){ editing = 'new'; renderDash(); return; }
+    if(b.hasAttribute('data-edit')){ editing = b.getAttribute('data-edit'); renderDash();
+      var el = $('tradeForm'); if(el) el.scrollIntoView({block:'nearest'}); return; }
+    if(b.id === 'tf_cancel'){ editing = null; renderDash(); return; }
+    if(b.id === 'tf_save'){
+      var sym = (($('tf_symbol')||{}).value || '').trim().toUpperCase();
+      if(!sym){ $('tf_fill').textContent = 'A symbol is needed.'; return; }
+      var rec = {
+        symbol:sym, date:($('tf_date')||{}).value || today(),
+        entry:num('tf_entry'), qty:Math.round(num('tf_qty')||0),
+        stop:num('tf_stop'), target:num('tf_target'),
+        note:(($('tf_note')||{}).value || '')
+      };
+      if(rec.entry == null || !rec.qty){ $('tf_fill').textContent = 'Entry price and quantity are needed.'; return; }
+      if(editing === 'new'){
+        rec.id = 't' + Date.now() + Math.random().toString(36).slice(2,6);
+        trades.push(rec);
+      } else {
+        var t = trades.filter(function(x){ return x.id === editing; })[0];
+        if(t){
+          for(var k in rec) t[k] = rec[k];
+          if(t.exit && $('tf_exitPrice')){
+            t.exit.price = num('tf_exitPrice');
+            t.exit.date = ($('tf_exitDate')||{}).value || t.exit.date;
+          }
+        }
+      }
+      editing = null; saveTrades(); renderDash(); return;
+    }
+    if(b.id === 'tf_sell'){
+      var t2 = trades.filter(function(x){ return x.id === editing; })[0];
+      if(t2){ t2.exit = {price:num('tf_entry') != null ? (lastClose(t2.symbol) || t2.entry) : t2.entry,
+                         date:today(), reason:'sold'}; }
+      editing = null; saveTrades(); renderDash(); return;
+    }
+    if(b.id === 'tf_del'){
+      trades = trades.filter(function(x){ return x.id !== editing; });
+      editing = null; saveTrades(); renderDash(); return;
+    }
+    if(b.hasAttribute('data-close')){
+      var id = b.getAttribute('data-close');
+      var tt = trades.filter(function(x){ return x.id === id; })[0];
+      if(tt){ var d = detectClose(tt); if(d) tt.exit = d; }
+      saveTrades(); renderDash(); return;
+    }
+    if(b.hasAttribute('data-dismiss')){
+      dismissed[b.getAttribute('data-dismiss')] = 1; saveTrades(); renderDash(); return;
+    }
+    if(b.id === 'expJournal'){
+      var blob = new Blob([JSON.stringify({trades:trades, exported:today(), v:1}, null, 1)],
+                          {type:'application/json'});
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'reversal-desk-journal-' + today() + '.json';
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(a.href); }, 2000);
+      return;
+    }
+    if(b.id === 'impJournal'){ $('impFile').click(); return; }
+  });
+
+  document.addEventListener('change', function(e){
+    if(e.target.id !== 'impFile') return;
+    var f = e.target.files && e.target.files[0]; if(!f) return;
+    var fr = new FileReader();
+    fr.onload = function(){
+      try{
+        var j = JSON.parse(fr.result);
+        var incoming = j.trades || [];
+        if(!Array.isArray(incoming)) throw new Error('not a journal file');
+        // Merge rather than replace: restoring a backup should never silently
+        // throw away trades you have entered since.
+        var have = {}; trades.forEach(function(t){ have[t.id] = 1; });
+        var added = 0;
+        incoming.forEach(function(t){ if(t && t.id && !have[t.id]){ trades.push(t); added++; } });
+        saveTrades(); renderDash();
+        alert('Restored ' + added + ' trade' + (added===1?'':'s') + ' (' +
+              (incoming.length - added) + ' already here).');
+      }catch(err){ alert('That file did not look like a journal backup.'); }
+      e.target.value = '';
+    };
+    fr.readAsText(f);
+  });
+
+  loadTrades();   // after `var trades = []` above, or its initialiser wipes this
   fetch('data.json?t='+Date.now()).then(function(r){
     if(!r.ok) throw new Error('data.json not found');
     return r.json();
-  }).then(function(j){ data = j; render(); }).catch(function(){
+  }).then(function(j){ data = j; render(); setView((location.hash||'').replace('#','')); }).catch(function(){
     // a preview copy can ship its rows inline; a real deployment has no seed tag
     var seed = document.getElementById('seed-data');
     if(seed){
