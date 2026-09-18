@@ -73,6 +73,8 @@ input{font:inherit; color:inherit}
 .slash{color:var(--faint); margin:0 2px; font-size:11px}
 .rr{font-family:var(--mono); font-variant-numeric:tabular-nums}
 .rr.poor{color:var(--faint)}
+.tcard .v.thin{color:var(--faint)}
+.rrfix{font-family:var(--mono); font-size:14px; color:var(--muted)}
 tr.row.poorrr td:not(:first-child){opacity:.55}
 .mcard.poorrr{opacity:.62}
 .rrflag{font-family:var(--sans); font-size:10px; color:var(--faint); border:1px solid var(--line);
@@ -431,8 +433,10 @@ footer b{color:var(--muted); font-weight:600}
       <input class="inp num" id="maxDeploy" type="number" min="0" step="5000" placeholder="no cap">
     </div>
     <div class="field">
-      <label for="minRR">Min R:R</label>
-      <input class="inp num" id="minRR" type="number" min="1" step="0.5" value="2" style="width:66px">
+      <label for="minRR">Min risk : reward</label>
+      <span class="rrfix">1 :</span>
+      <input class="inp num" id="minRR" type="number" min="1" step="0.5" value="2" style="width:62px"
+             title="risk is always 1 — this is the reward side">
     </div>
     <span class="formula">RPT = total risk ÷ 50</span>
     <div class="rpt"><span class="k">Risk per trade</span><span class="v num" id="rptVal">₹2,000</span></div>
@@ -500,7 +504,7 @@ footer b{color:var(--muted); font-weight:600}
         <tr>
           <th class="l">Stock</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
           <th>ATR %</th><th>vs Nifty</th><th>Resistance ₹</th><th>To break</th><th>Stop ₹</th>
-          <th>Target ₹</th><th>R:R</th><th>Qty</th><th>State</th><th></th>
+          <th>Target ₹</th><th>Risk : Reward</th><th>Qty</th><th>State</th><th></th>
         </tr>
       </thead>
       <tbody id="tbody"><tr><td colspan="13" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
@@ -584,6 +588,11 @@ footer b{color:var(--muted); font-weight:600}
       if(byCapital < qty){ qty = Math.max(byCapital, 0); capped = true; }
     }
     var tooSmall = !!(rps && qty === 0);
+    // Your notes allow four open positions. One trade taking more than a
+    // quarter of the risk capital cannot coexist with three others, so flag it
+    // rather than quietly printing a deployment bigger than the account.
+    var deployNow = (qty != null && entry != null) ? qty * entry : null;
+    var overBudget = !!(deployNow && !cfg.maxDeploy && deployNow > cfg.totalRisk / 4);
     // Risk:reward is recomputed here rather than trusted from the file,
     // because your risk capital and ATR multiple move the entry and the stop.
     // The TARGET does not move -- it is a price on the chart (the pattern's
@@ -592,10 +601,12 @@ footer b{color:var(--muted); font-weight:600}
     var rr = (target != null && entry != null && rps) ? (target - entry) / rps : null;
     if(rr != null && !isFinite(rr)) rr = null;
     return {
-      tooSmall:tooSmall, capped:capped,
+      tooSmall:tooSmall, capped:capped, overBudget:overBudget,
       capitalForOne: tooSmall ? rps * 50 : null,
       target:target, targetSource:sx.targetSource, rr:rr,
-      poorRR: (rr != null && rr < minRR()),
+      // Compare with the precision the page actually shows, or a 1.9987
+      // that prints as 1:2.00 gets flagged for being below 1:2.
+      poorRR: (rr != null && Math.round(rr * 100) / 100 < minRR()),
       volumeConfirmed: sx.volumeConfirmed, volumeRatio: sx.volumeRatio,
       type:sx.type, label:sx.label || setupLabel(sx.type), date:sx.date, detail:sx.detail,
       entry:entry, stop:stop, rps:rps, qty:qty, mults:mults,
@@ -664,6 +675,7 @@ footer b{color:var(--muted); font-weight:600}
       atRisk:(qty!=null&&rps!=null)?qty*rps:null, broke:broke, dist:dist,
       state:state, label:label, note:o.note||'', targets:targets, mults:mults,
       tooSmall:shown.tooSmall, capped:shown.capped, capitalForOne:shown.capitalForOne,
+      overBudget:shown.overBudget,
       // From `shown`, not from the file: your risk capital and ATR multiple
       // move the entry and the stop, so the ratio has to move with them.
       target:shown.target, targetSource:shown.targetSource,
@@ -727,7 +739,8 @@ footer b{color:var(--muted); font-weight:600}
     }
     var q = search.trim().toLowerCase();
     if(q) out = out.filter(function(r){ return r.symbol.toLowerCase().indexOf(q)>=0 || r.name.toLowerCase().indexOf(q)>=0; });
-    if(filter==='goodrr') out = out.filter(function(r){ return r.rr != null && r.rr >= minRR(); });
+    if(filter==='goodrr') out = out.filter(function(r){
+      return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); });
     else if(filter==='starred') out = out.filter(function(r){ return isStar(r.symbol); });
     else if(filter==='triggered') out = out.filter(function(r){ return r.state==='triggered'; });
     else if(filter==='armed') out = out.filter(function(r){ return r.state==='armed'||r.state==='triggered'; });
@@ -795,10 +808,16 @@ footer b{color:var(--muted); font-weight:600}
           '<div><div class="k">Close</div><div class="v">'+money(r.price)+'</div></div>'+
           '<div><div class="k">Entry</div><div class="v">'+money(r.entry)+'</div></div>'+
           '<div><div class="k">Stop</div><div class="v">'+money(r.stop)+'</div></div>'+
+          '<div><div class="k">Target</div><div class="v">'+money(r.target)+'</div></div>'+
+          '<div><div class="k">Risk : Reward</div><div class="v'+(r.poorRR?' thin':'')+'">'+
+            rrText(r.rr)+'</div></div>'+
           '<div><div class="k">Qty</div><div class="v">'+(r.qty!=null?INR0.format(r.qty):'—')+'</div></div>'+
-          '<div><div class="k">Deploy</div><div class="v">'+(r.deploy!=null?money(r.deploy,0):'—')+'</div></div>'+
+          '<div><div class="k">Deploy</div><div class="v'+(r.overBudget?' thin':'')+'">'+
+            (r.deploy!=null?money(r.deploy,0):'—')+'</div></div>'+
           '<div><div class="k">At risk</div><div class="v">'+(r.atRisk!=null?money(r.atRisk,0):'—')+'</div></div>'+
-        '</div><div class="why">'+why+'</div></article>';
+        '</div><div class="why">'+why+levelNote(r)+
+          (r.overBudget?' <b>That is over a quarter of your risk capital in one position.</b>':'')+
+        '</div></article>';
     }).join('')+'</div>';
   }
 
@@ -854,9 +873,15 @@ footer b{color:var(--muted); font-weight:600}
         '<div class="mathrow"><span>Sector</span><span>'+esc(r.industry||'—')+'</span></div>'+
         '<div class="mathrow"><span>In index</span><span>'+esc((r.universes||[]).map(uniLabel).join(', ')||'—')+'</span></div>'+
         (r.rr != null
-          ? '<div class="mathrow"><span>Risk : reward</span><span>'+r.rr.toFixed(2)+':1'+
-            (r.poorRR ? ' (below your '+minRR()+':1)' : '')+
-            (r.targetSource ? ' \u2014 '+esc(r.targetSource) : '')+'</span></div>'
+          ? '<div class="mathrow"><span>Risk : reward</span><span>'+rrText(r.rr)+
+            (r.poorRR ? ' (below your 1:'+minRR()+')' : '')+
+            (r.targetSource ? ' \u2014 target from '+esc(r.targetSource) : '')+'</span></div>'
+          : '')+
+        (r.stopSource
+          ? '<div class="mathrow"><span>Stop sits on</span><span>'+
+            ({pattern:'the pattern itself', support:'a support level', ATR:'the ATR rule'}[r.stopSource] || esc(r.stopSource))+
+            (r.stopWidened ? ' \u2014 widened: the candle\'s own low was too close to the entry to be a real stop' : '')+
+            '</span></div>'
           : '')+
         (r.volumeConfirmed != null
           ? '<div class="mathrow"><span>Volume on the signal</span><span>'+
@@ -911,13 +936,37 @@ footer b{color:var(--muted); font-weight:600}
     }).join('<span class="slash">/</span>');
   }
   // R:R as the page reads it, with the reason it is what it is on hover.
+  // Written the way your notes write it: risk is always 1, reward is the part
+  // that varies. 1:2 means you are risking one to make two.
+  // Where the two prices came from, in words. A target is only as good as the
+  // level behind it, so the number of touches is worth saying out loud.
+  function levelNote(r){
+    var bits = [];
+    if(r.target != null){
+      bits.push('Target <b>' + INR.format(r.target) + '</b>' +
+        (r.targetSource ? ' (' + esc(r.targetSource) + ')' : '') +
+        (r.rr != null ? ', risk:reward ' + rrText(r.rr) : ''));
+    } else if(r.targetSource){
+      bits.push('No target: ' + esc(r.targetSource) + '.');
+    }
+    if(r.stopWidened){
+      bits.push('Stop widened to real support \u2014 the pattern\'s own low sat too close to the entry.');
+    } else if(r.stopSource === 'support'){
+      bits.push('Stop sits below a support level.');
+    }
+    return bits.length ? ' ' + bits.join(' ') : '';
+  }
+
+  function rrText(rr){ return (rr == null) ? '—' : '1:' + rr.toFixed(2); }
   function rrCell(r){
-    if(r.rr == null) return '<span class="stale">—</span>';
-    var poor = r.rr < minRR();
-    var why = (r.targetSource ? 'target from ' + r.targetSource : 'target');
-    return '<span class="rr'+(poor?' poor':'')+'" title="'+esc(why)+
-      ' at '+(r.target!=null?INR.format(r.target):'—')+'">'+r.rr.toFixed(1)+':1</span>'+
-      (poor ? '<span class="rrflag" title="below your minimum of '+minRR()+':1">thin</span>' : '');
+    if(r.rr == null){
+      return '<span class="stale" title="'+esc(r.targetSource || 'no target')+'">—</span>';
+    }
+    var poor = Math.round(r.rr * 100) / 100 < minRR();
+    var why = (r.targetSource ? 'target from ' + r.targetSource : 'target') +
+      ' at ' + (r.target != null ? INR.format(r.target) : '—');
+    return '<span class="rr'+(poor?' poor':'')+'" title="'+esc(why)+'">'+rrText(r.rr)+'</span>'+
+      (poor ? '<span class="rrflag" title="below your minimum of 1:'+minRR()+'">thin</span>' : '');
   }
 
   // Topping patterns. Never an entry -- a flag that the chart is fighting you.
@@ -1095,7 +1144,7 @@ footer b{color:var(--muted); font-weight:600}
         mcell('Stop', money(r.stop))+
         mcell('Qty', qty)+
         mcell('Target', money(r.target))+
-        mcell('R:R', r.rr!=null ? r.rr.toFixed(1)+':1' : '—', (r.poorRR?'stale':''))+
+        mcell('Risk:Reward', rrText(r.rr), (r.poorRR?'stale':''))+
         mcell('Deploy', r.deploy!=null?money(r.deploy,0):'—')+
       '</div>'+
       (open ? '<div class="mc-detail">'+drawerBody(r)+'</div>' : '')+
@@ -1297,7 +1346,8 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="num">'+(r.target!=null?INR.format(r.target):(r.targets&&r.targets.length?INR.format(r.targets[0]):'—'))+'</td>'+
         '<td class="num">'+rrCell(r)+'</td>'+
         '<td class="num">'+(r.tooSmall?'<span class="toosmall" title="one share risks more than your risk per trade">too big</span>'
-            :(r.qty!=null?INR0.format(r.qty)+(r.capped?'<span class="touch">cap</span>':''):'—'))+'</td>'+
+            :(r.qty!=null?INR0.format(r.qty)+(r.capped?'<span class="touch">cap</span>':'')+
+            (r.overBudget?'<span class="rrflag" title="more than a quarter of your risk capital in one position — you could not hold four of these">big</span>':''):'—'))+'</td>'+
         '<td>'+pill(r)+'</td>'+
         '<td><button class="iconbtn" data-open="'+esc(r.symbol)+'" aria-expanded="'+(openRow===r.symbol)+'">'+(openRow===r.symbol?'▴':'▾')+'</button></td>'+
       '</tr>';

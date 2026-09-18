@@ -87,6 +87,16 @@ TURNOVER_DAYS = 20      # sessions averaged for the liquidity proxy
 # not hidden -- you may still want it, and hiding it would hide the near misses.
 MIN_RR       = 2.0
 
+# --- what makes a stop a real stop ------------------------------------------
+# A pattern's own stop is the candle's low, and when that candle is tiny the
+# stop lands a few paise under the entry. That is not a stop: ordinary noise
+# takes it out on the first tick. Worse, risk-per-share near zero makes the
+# quantity explode and the risk:reward ratio go to infinity, so screening for
+# a HIGH ratio would surface exactly the worst trades. These put a floor on it.
+MIN_STOP_ATR = 0.5      # a stop closer to entry than this is not believable
+MAX_STOP_ATR = 4.0      # a support level further than this is not worth using
+SUPPORT_BUFFER_ATR = 0.25   # the stop sits this far BELOW the support level
+
 # --- setups and levels ------------------------------------------------------
 # Bullish ones are entries. "doubletop" and "hs" are TOPPING patterns: they are
 # carried as warnings on the row and never given an entry, stop or quantity.
@@ -608,7 +618,50 @@ def volume_state(df: pd.DataFrame, idx: int) -> dict:
     }
 
 
-def attach_reward(setup: dict, levels: list, price: float) -> dict:
+def ground_stop(setup: dict, atr: float, levels: list) -> dict:
+    """Put the stop somewhere defensible, and record why it is there.
+
+    Order of preference:
+      1. the pattern's own stop -- but only if it is a believable distance away
+      2. just below the nearest real SUPPORT level under the entry, because a
+         level many touches agree on is where price actually tends to hold
+      3. the ATR rule from the notes, when the chart offers no support nearby
+
+    Without step 1's sanity check, a doji-shaped tweezer produces a stop 0.04%
+    under the entry, a quantity in the thousands, and a deployment several times
+    the account. That is the single worst failure this scan can produce, because
+    every downstream number looks superficially fine.
+    """
+    entry = setup.get("entry")
+    if entry is None or entry <= 0:
+        return setup
+    unit = atr if (atr and np.isfinite(atr) and atr > 0) else entry * 0.01
+
+    stop = setup.get("stop")
+    if stop is not None and (entry - stop) >= unit * MIN_STOP_ATR:
+        setup["stopSource"] = "pattern"
+        return setup
+
+    tight = stop                                   # remember what we rejected
+    below = [l for l in (levels or []) if l["price"] < entry * 0.999]
+    support = max(below, key=lambda l: l["price"]) if below else None
+
+    if support is not None and (entry - support["price"]) <= unit * MAX_STOP_ATR:
+        setup["stop"] = round(support["price"] - unit * SUPPORT_BUFFER_ATR, 2)
+        setup["stopSource"] = "support"
+        setup["stopTouches"] = support.get("touches")
+    else:
+        setup["stop"] = round(entry - unit * ATR_MULT, 2)
+        setup["stopSource"] = "ATR"
+
+    if tight is not None:
+        setup["stopWidened"] = True
+        setup["patternStop"] = round(tight, 2)
+    return setup
+
+
+def attach_reward(setup: dict, levels: list, price: float,
+                  high52: float = None) -> dict:
     """The reward half of risk:reward, and where it comes from.
 
     Preference order, because they are not equally trustworthy:
@@ -633,15 +686,34 @@ def attach_reward(setup: dict, levels: list, price: float) -> dict:
 
     above = sorted((l for l in (levels or []) if l["price"] > entry * 1.002),
                    key=lambda l: l["price"])
+    # A level price has touched once is barely a level. Prefer the nearest one
+    # with real agreement behind it, and only fall back to a single touch when
+    # the chart offers nothing better.
+    strong = [l for l in above if (l.get("touches") or 1) >= LEVEL_MIN_TOUCHES]
+    above = strong or above
     if above:
-        wall = above[0]["price"]
-        # A wall below the measured move caps what is realistically reachable.
-        if target is None or wall < target:
-            target, source = wall, "next resistance"
+        wall = above[0]
+        # A wall below the measured move caps what is realistically reachable:
+        # price has to get through it before the measured move can happen.
+        if target is None or wall["price"] < target:
+            target = wall["price"]
+            n = wall.get("touches") or 1
+            source = f"resistance, {n} touch" + ("es" if n != 1 else "")
+            setup["targetTouches"] = wall.get("touches")
+
+    if target is None and high52 and high52 > entry * 1.002:
+        # No clustered level above, but the 52-week high is a real price that
+        # real sellers remember.
+        target, source = high52, "52-week high"
 
     if target is None:
-        target = entry + rps * max(RR_TARGETS)
-        source = f"{max(RR_TARGETS)}R (no level above)"
+        # Nothing above the entry on the chart. Rather than invent a target out
+        # of a risk multiple and print a confident ratio from it, say so.
+        setup["target"] = None
+        setup["targetSource"] = "no resistance above"
+        setup["rr"] = None
+        setup["poorRR"] = False
+        return setup
 
     rr = (target - entry) / rps
     setup["target"] = round(target, 2)
@@ -1005,39 +1077,44 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
                if (entry and risk_per_share) else [])
 
     # --- every setup this stock is showing right now -----------------------
-    setups = []
-    if divergence and "divergence" in SETUPS:
-        d = {"type": "divergence", "label": "RSI divergence",
-             "date": marks["dateB"] if marks else as_of, "ageBars": None,
-             "entry": round(entry, 2) if entry else None,
-             "stop": round(stop, 2) if stop else None,
-             "detail": (f"Price {marks['lowA']} → {marks['lowB']} (lower bottom), "
-                        f"RSI {marks['rsiA']} → {marks['rsiB']} (higher bottom)."
-                        if marks else "Bullish RSI divergence."),
-             "marks": marks}
-        setups.append(size_setup(d, last_price))
-    if "engulfing" in SETUPS:
-        for s in find_engulfing(df):
-            setups.append(size_setup(s, last_price))
-    if "tweezer" in SETUPS:
-        for s in find_tweezer(df, last_atr):
-            setups.append(size_setup(s, last_price))
-    if "doublebottom" in SETUPS:
-        for s in find_double_bottom(df, last_atr):
-            setups.append(size_setup(s, last_price))
-    if "invhs" in SETUPS:
-        for s in find_inverse_hs(df, last_atr):
-            setups.append(size_setup(s, last_price))
+    # The 52-week extremes are needed before sizing: they are the last resort
+    # for a target when the chart has no clustered level above the entry.
+    low_52 = round(float(df["Low"].iloc[-250:].min()), 2)
+    high_52 = round(float(df["High"].iloc[-250:].max()), 2)
 
-    # Everything above is an entry, so everything above gets a reward, a target
-    # and a real risk:reward ratio derived from the chart.
-    for s in setups:
+    raw = []
+    if divergence and "divergence" in SETUPS:
+        raw.append({"type": "divergence", "label": "RSI divergence",
+                    "date": marks["dateB"] if marks else as_of, "ageBars": None,
+                    "entry": round(entry, 2) if entry else None,
+                    "stop": round(stop, 2) if stop else None,
+                    "detail": (f"Price {marks['lowA']} → {marks['lowB']} (lower bottom), "
+                               f"RSI {marks['rsiA']} → {marks['rsiB']} (higher bottom)."
+                               if marks else "Bullish RSI divergence."),
+                    "marks": marks})
+    if "engulfing" in SETUPS:
+        raw.extend(find_engulfing(df))
+    if "tweezer" in SETUPS:
+        raw.extend(find_tweezer(df, last_atr))
+    if "doublebottom" in SETUPS:
+        raw.extend(find_double_bottom(df, last_atr))
+    if "invhs" in SETUPS:
+        raw.extend(find_inverse_hs(df, last_atr))
+
+    # Order matters. Ground the stop on real support FIRST, because every other
+    # number -- quantity, deployment, amount at risk, risk:reward -- is derived
+    # from the distance between entry and stop. Size it, then measure the reward
+    # against a price the chart can actually reach.
+    setups = []
+    for s in raw:
         s.setdefault("direction", "long")
-        attach_reward(s, levels, last_price)
-        # Volume on the bar the signal printed on, not on today.
+        ground_stop(s, last_atr, levels)
+        size_setup(s, last_price)
+        attach_reward(s, levels, last_price, high_52)
         age = s.get("ageBars")
         sig_idx = (len(df) - 1 - age) if isinstance(age, int) else len(df) - 1
         s.update(volume_state(df, sig_idx))
+        setups.append(s)
 
     # --- topping patterns: warnings, never entries -------------------------
     warnings = []
@@ -1109,6 +1186,9 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         "target": (primary or {}).get("target"),
         "targetSource": (primary or {}).get("targetSource"),
         "poorRR": bool((primary or {}).get("poorRR")),
+        "stopSource": (primary or {}).get("stopSource"),
+        "stopWidened": bool((primary or {}).get("stopWidened")),
+        "targetTouches": (primary or {}).get("targetTouches"),
         "volumeConfirmed": (primary or {}).get("volumeConfirmed"),
         "volumeRatio": (primary or {}).get("volumeRatio"),
         "setupTypes": sorted({s["type"] for s in setups}),
@@ -1131,8 +1211,8 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         "riskPerShare": round(risk_per_share, 2) if risk_per_share else None,
         "qty": qty,
         "deploy": round(qty * entry, 0) if (qty and entry) else None,
-        "low52": round(float(df["Low"].iloc[-250:].min()), 2),
-        "high52": round(float(df["High"].iloc[-250:].max()), 2),
+        "low52": low_52,
+        "high52": high_52,
     }
 
 
