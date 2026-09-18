@@ -96,7 +96,22 @@ NEAR_PCT     = 20.0     # an armed setup further than this below its resistance
 ALERT_MAX    = 30       # most lines per section in the e-mail. Across ~750
                         # stocks a full list would be unreadable; the dashboard
                         # is where you go for everything.
-HISTORY      = "1y"     # history pulled per stock
+# --- timeframes -------------------------------------------------------------
+# Which candle sizes to analyse. Weekly costs no extra downloads: the daily
+# frame is resampled, so it is one fetch and two passes of the same maths.
+#
+# Every window below (DIV_WINDOW, LEVEL_WINDOW, SWING_BARS, TREND_BARS,
+# FRESH_BARS) is counted in BARS, not days, so they carry across untouched --
+# FRESH_BARS = 5 means five sessions on daily and five weeks on weekly, which
+# is exactly what the exit-on-the-fifth-candle rule means on each chart.
+TIMEFRAMES   = ["daily", "weekly"]
+TF_LABEL     = {"daily": "Daily", "weekly": "Weekly"}
+TF_RULE      = {"weekly": "W-FRI"}      # NSE weeks end Friday
+BASE_TF      = "daily"  # the timeframe the row sort and the 52-week range use
+
+HISTORY      = "5y"     # history pulled per stock. Daily analysis only ever
+                        # looks at the tail of this, but weekly needs the depth:
+                        # 250 weekly bars of levels IS five years of chart.
 CHUNK        = 25       # stocks per yfinance request. Bigger means fewer
                         # round-trips over ~750 stocks; too big and one refused
                         # request loses a lot of names at once, so 25 is the
@@ -341,6 +356,30 @@ def comparative_strength(close: pd.Series, bench: pd.Series, period: int = CRS_P
     return (last >= last_avg), round((last / last_avg - 1) * 100, 2)
 
 
+def resample_tf(df: pd.DataFrame, tf: str) -> pd.DataFrame:
+    """Daily bars -> the chosen candle size. Open is the week's first trade,
+    Close its last, High/Low the extremes, Volume the sum."""
+    rule = TF_RULE.get(tf)
+    if not rule:
+        return df
+    out = df.resample(rule).agg({
+        "Open": "first", "High": "max", "Low": "min",
+        "Close": "last", "Volume": "sum",
+    })
+    return out.dropna(subset=["Close"])
+
+
+def bar_is_complete(daily: pd.DataFrame, resampled: pd.DataFrame, tf: str) -> bool:
+    """Is the newest bar finished, or still forming?
+
+    Mid-week the last weekly bar holds Monday to today and is labelled with the
+    coming Friday. A tweezer on a bar that has three days left to run can still
+    disappear, so the page has to be able to say so."""
+    if tf == BASE_TF or resampled.empty or daily.empty:
+        return True
+    return resampled.index[-1].date() <= daily.index[-1].date()
+
+
 def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
             bench: pd.Series = None) -> dict:
     df = df.dropna(subset=["Close"]).copy()
@@ -545,6 +584,66 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
 # ----------------------------------------------------------------------------
 # Fetch
 # ----------------------------------------------------------------------------
+# Fields that describe the STOCK rather than the chart you are looking at, so
+# they are stored once instead of once per timeframe.
+SHARED_FIELDS = ("symbol", "name", "industry", "universes")
+STOCK_FIELDS  = ("turnover", "low52", "high52")
+
+
+def build_record(symbol: str, name: str, meta: dict, daily: pd.DataFrame,
+                 benches: dict) -> dict:
+    """One stock across every timeframe, as a single record."""
+    results, complete = {}, {}
+    for tf in TIMEFRAMES:
+        frame = resample_tf(daily, tf)
+        complete[tf] = bar_is_complete(daily, frame, tf)
+        try:
+            results[tf] = analyse(symbol, name, meta, frame, benches.get(tf))
+        except Exception as exc:  # noqa: BLE001
+            results[tf] = {
+                "symbol": symbol, "name": name,
+                "industry": (meta or {}).get("industry", "Unclassified"),
+                "universes": (meta or {}).get("universes", []),
+                "status": "nodata", "reason": str(exc),
+            }
+
+    base = results.get(BASE_TF) or next(iter(results.values()))
+    rec = {k: base.get(k) for k in SHARED_FIELDS}
+    # Liquidity and the 52-week range come from the daily frame whichever
+    # timeframe you are viewing: weekly volume sums read about five times
+    # daily, and a "52-week high" off 250 weekly bars would quietly mean five
+    # years. Neither is a property of the candle size.
+    for k in STOCK_FIELDS:
+        rec[k] = base.get(k)
+
+    rec["tf"] = {}
+    last_daily = daily.index[-1].strftime("%Y-%m-%d") if len(daily) else None
+    for tf, r in results.items():
+        slim = {k: v for k, v in r.items()
+                if k not in SHARED_FIELDS and k not in STOCK_FIELDS}
+        slim["barComplete"] = complete[tf]
+        if not complete[tf]:
+            # Resampling labels a week by its Friday, so mid-week that label is
+            # a date that has not happened yet. Report the real last trading
+            # day as "as of" and keep the Friday separately as the week's end.
+            slim["barEnds"] = slim.get("asOf")
+            slim["asOf"] = last_daily
+        rec["tf"][tf] = slim
+
+    # A setup that prints on more than one candle size is the stronger read.
+    seen = {}
+    for tf, r in results.items():
+        for t in (r.get("setupTypes") or []):
+            seen.setdefault(t, []).append(tf)
+    rec["agree"] = {t: tfs for t, tfs in seen.items() if len(tfs) > 1}
+
+    # Top-level status drives the row order only; the page overlays the status
+    # of whichever timeframe you are actually looking at.
+    rec["status"] = base.get("status", "nodata")
+    rec["asOf"] = base.get("asOf")
+    return rec
+
+
 def fetch_benchmark() -> pd.Series:
     """Daily closes for the Nifty 50, the comparative-strength trend line."""
     try:
@@ -651,6 +750,16 @@ def main() -> int:
           f"(overlap between indexes is downloaded once)", flush=True)
 
     bench = fetch_benchmark()
+    # The index has to be measured on the same candle size as the stock, or
+    # comparative strength compares five months against two years.
+    benches = {BASE_TF: bench}
+    for tf in TIMEFRAMES:
+        if tf == BASE_TF:
+            continue
+        rule = TF_RULE.get(tf)
+        benches[tf] = (bench.resample(rule).last().dropna()
+                       if (bench is not None and not bench.empty and rule) else None)
+
     frames, missing = fetch_frames([row["symbol"] for row in watchlist])
     if not frames:
         print("No price data came back at all -- leaving data.json untouched.", file=sys.stderr)
@@ -662,7 +771,7 @@ def main() -> int:
         if sym not in frames:
             continue
         try:
-            rows.append(analyse(sym, row["name"], row, frames[sym], bench))
+            rows.append(build_record(sym, row["name"], row, frames[sym], benches))
         except Exception as exc:  # noqa: BLE001
             print(f"  {sym}: {exc}", flush=True)
             missing.append(sym)
@@ -685,6 +794,19 @@ def main() -> int:
             "crsPeriod": CRS_PERIOD, "atrPctFloor": ATRPCT_FLOOR,
             "benchmark": "Nifty 50", "hasBenchmark": bench is not None,
         },
+        "baseTimeframe": BASE_TF,
+        "timeframes": [
+            {"key": tf, "label": TF_LABEL.get(tf, tf),
+             # Every stock shares the same week boundary, so the first row that
+             # has an opinion answers for all of them.
+             "barComplete": next((r["tf"][tf].get("barComplete", True)
+                                  for r in rows if tf in r.get("tf", {})), True),
+             "lastBar": next((r["tf"][tf].get("asOf")
+                              for r in rows if r.get("tf", {}).get(tf, {}).get("asOf")), None),
+             "barEnds": next((r["tf"][tf].get("barEnds")
+                              for r in rows if r.get("tf", {}).get(tf, {}).get("barEnds")), None)}
+            for tf in TIMEFRAMES
+        ],
         "universeGroups": [{"key": g, "label": lbl} for g, lbl in UNIVERSE_GROUPS],
         "universes": [
             {"key": k, "label": UNIVERSE_CATALOGUE.get(k, {}).get("label", k),
@@ -704,9 +826,6 @@ def main() -> int:
     with open("data.json", "w", encoding="utf-8") as fh:
         json.dump(payload, fh, separators=(",", ":"))
 
-    triggered = [r for r in rows if r["status"] == "triggered"]
-    armed = [r for r in rows if r["status"] == "armed"]
-
     # Which index to name for a stock that sits in eight of them. The smallest
     # one it belongs to is the most informative: "Nifty 50" tells you more than
     # "Nifty 500", and "Nifty Bank" more than either.
@@ -719,46 +838,87 @@ def main() -> int:
         best = min(tags, key=lambda t: sizes[t])
         return UNIVERSE_CATALOGUE.get(best, {}).get("label", best)
 
+    def view(r, tf) -> dict:
+        """The stock as it looks on one candle size, shared fields included."""
+        merged = {k: r.get(k) for k in SHARED_FIELDS}
+        merged.update({k: r.get(k) for k in STOCK_FIELDS})
+        merged.update(r.get("tf", {}).get(tf, {}))
+        return merged
+
+    def agree_note(r, tf) -> str:
+        """'also weekly' -- the same pattern on another candle size."""
+        others = sorted({o for tfs in (r.get("agree") or {}).values()
+                         for o in tfs if o != tf})
+        return f", also {'/'.join(TF_LABEL.get(o, o).lower() for o in others)}" if others else ""
+
     lines = [f"# Midcap Reversal Desk -- {as_of}", ""]
-    if triggered:
-        lines.append(f"## Triggered ({len(triggered)})")
-        lines.append("Divergence confirmed and price has cleared the resistance.")
+    counts = {"triggered": 0, "armed": 0}
+
+    # One section per candle size. A line that does not say which chart it came
+    # from is useless: a daily tweezer and a weekly tweezer are different trades.
+    for tf in TIMEFRAMES:
+        label = TF_LABEL.get(tf, tf)
+        views = [view(r, tf) for r in rows]
+        fired = [(r, v) for r, v in zip(rows, views) if v.get("status") == "triggered"]
+        arm   = [(r, v) for r, v in zip(rows, views) if v.get("status") == "armed"]
+        counts["triggered"] += len(fired)
+        counts["armed"] += len(arm)
+
+        meta_tf = next((t for t in payload["timeframes"] if t["key"] == tf), {})
+        forming = "" if meta_tf.get("barComplete", True) else \
+            f" — the current {label.lower()} candle is still forming, so these can change"
+
+        if not fired and not arm:
+            continue
+        lines.append(f"# {label} candles{forming}")
         lines.append("")
-        for r in triggered[:ALERT_MAX]:
-            lines.append(
-                f"- **{r['symbol']}** ({r['name']}, {tag_of(r)}) at Rs {r['price']:,} -- "
-                f"broke {r['resistance']:,}, RSI {r['rsi']}, stop {r['stop']:,}, "
-                f"qty {r['qty']}"
-            )
-        if len(triggered) > ALERT_MAX:
-            lines.append(f"- _...and {len(triggered) - ALERT_MAX} more "
-                         f"-- see the dashboard._")
-        lines.append("")
-    near = sorted(
-        (r for r in armed
-         if r.get("distancePct") is not None and r["distancePct"] <= NEAR_PCT),
-        key=lambda r: r["distancePct"],
-    )
-    if near:
-        lines.append(f"## Armed and within {NEAR_PCT:.0f}% of the trigger ({len(near)})")
-        lines.append("Divergence confirmed, closest to the resistance break first.")
-        lines.append("")
-        for r in near[:ALERT_MAX]:
-            lines.append(
-                f"- **{r['symbol']}** ({tag_of(r)}) at Rs {r['price']:,} -- needs "
-                f"{r['distancePct']}% to clear {r['resistance']:,} (RSI {r['rsi']})"
-            )
-        if len(near) > ALERT_MAX:
-            lines.append(f"- _...and {len(near) - ALERT_MAX} more within "
-                         f"{NEAR_PCT:.0f}%._")
-        lines.append("")
-    far = len(armed) - len(near)
-    if far > 0:
-        lines.append(f"_{far} more armed setup(s) sit further than {NEAR_PCT:.0f}% "
-                     f"below their resistance -- see the dashboard._")
-        lines.append("")
-    if not triggered and not armed:
-        lines.append("No divergence setups today.")
+
+        if fired:
+            lines.append(f"## Triggered on {label.lower()} ({len(fired)})")
+            lines.append("Divergence confirmed and price has cleared the resistance.")
+            lines.append("")
+            for r, v in fired[:ALERT_MAX]:
+                lines.append(
+                    f"- **{v['symbol']}** ({v['name']}, {tag_of(v)}{agree_note(r, tf)}) "
+                    f"at Rs {v['price']:,} -- broke {v['resistance']:,}, "
+                    f"RSI {v['rsi']}, stop {v['stop']:,}, qty {v['qty']}"
+                )
+            if len(fired) > ALERT_MAX:
+                lines.append(f"- _...and {len(fired) - ALERT_MAX} more "
+                             f"-- see the dashboard._")
+            lines.append("")
+
+        near = sorted(
+            ((r, v) for r, v in arm
+             if v.get("distancePct") is not None and v["distancePct"] <= NEAR_PCT),
+            key=lambda rv: rv[1]["distancePct"],
+        )
+        if near:
+            lines.append(f"## Armed on {label.lower()}, within {NEAR_PCT:.0f}% "
+                         f"of the trigger ({len(near)})")
+            lines.append("Closest to the resistance break first.")
+            lines.append("")
+            for r, v in near[:ALERT_MAX]:
+                lines.append(
+                    f"- **{v['symbol']}** ({tag_of(v)}{agree_note(r, tf)}) "
+                    f"at Rs {v['price']:,} -- needs {v['distancePct']}% to clear "
+                    f"{v['resistance']:,} (RSI {v['rsi']})"
+                )
+            if len(near) > ALERT_MAX:
+                lines.append(f"- _...and {len(near) - ALERT_MAX} more within "
+                             f"{NEAR_PCT:.0f}%._")
+            lines.append("")
+
+        far = len(arm) - len(near)
+        if far > 0:
+            lines.append(f"_{far} more armed on {label.lower()} sit further than "
+                         f"{NEAR_PCT:.0f}% below their resistance._")
+            lines.append("")
+
+    triggered = [r for r in rows if r["status"] == "triggered"]
+    armed = [r for r in rows if r["status"] == "armed"]
+    if not counts["triggered"] and not counts["armed"]:
+        lines.append("No setups on any timeframe today.")
     if missing:
         miss = sorted(set(missing))
         shown = ", ".join(miss[:20])
@@ -767,18 +927,29 @@ def main() -> int:
         lines.append(f"_No data for: {shown}{more}_")
 
     with open("alerts.md", "w", encoding="utf-8") as fh:
-        fh.write("\n".join(lines))
+        # Trailing newline matters: the workflow feeds this file into a
+        # GITHUB_OUTPUT heredoc, and without it the closing delimiter lands on
+        # the same line as the last sentence and is never recognised.
+        fh.write("\n".join(lines) + "\n")
 
-    print(f"scanned {len(rows)} stocks | triggered {len(triggered)} | armed {len(armed)} "
-          f"| missing {len(set(missing))}")
+    print(f"scanned {len(rows)} stocks | missing {len(set(missing))}")
+    for tf in TIMEFRAMES:
+        t = sum(1 for r in rows if r.get("tf", {}).get(tf, {}).get("status") == "triggered")
+        a = sum(1 for r in rows if r.get("tf", {}).get(tf, {}).get("status") == "armed")
+        meta_tf = next((x for x in payload["timeframes"] if x["key"] == tf), {})
+        forming = "" if meta_tf.get("barComplete", True) else "  (candle still forming)"
+        print(f"  {TF_LABEL.get(tf, tf):<8} triggered {t:>3} | armed {a:>3}{forming}")
+    both = sum(1 for r in rows if r.get("agree"))
+    print(f"  {both} stock(s) show the same setup on more than one timeframe")
 
     # tell the workflow whether an e-mail is worth sending
     gh_out = os.environ.get("GITHUB_OUTPUT")
     if gh_out:
         with open(gh_out, "a", encoding="utf-8") as fh:
-            fh.write(f"has_alerts={'true' if (triggered or armed) else 'false'}\n")
-            fh.write(f"subject=Midcap reversal: {len(triggered)} triggered, "
-                     f"{len(armed)} armed ({as_of})\n")
+            fh.write(f"has_alerts={'true' if (counts['triggered'] or counts['armed']) else 'false'}\n")
+            fh.write(f"subject=Reversal desk: {counts['triggered']} triggered, "
+                     f"{counts['armed']} armed across "
+                     f"{len(TIMEFRAMES)} timeframes ({as_of})\n")
     return 0
 
 

@@ -66,6 +66,11 @@ input{font:inherit; color:inherit}
 .sectorpick{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin-left:auto}
 .indexpick{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
 #uniSel{min-width:190px; font-weight:600}
+.tfpick{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
+.tfpick .chip[aria-pressed="true"]{font-weight:600}
+.forming{font-size:12px; color:var(--brass); font-family:var(--mono)}
+.agree{font-family:var(--mono); font-size:10px; color:var(--brass); margin-left:2px; vertical-align:super}
+.tfnote{font-size:12px; color:var(--faint); font-family:var(--mono)}
 .chip .n{font-family:var(--mono); font-size:11px; opacity:.75; margin-left:5px}
 .riskbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px 26px; margin-top:12px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:4px}
 .field{display:flex; align-items:center; gap:9px}
@@ -263,14 +268,18 @@ footer b{color:var(--muted); font-weight:600}
      behind a tap defeats the point of having fourteen of them. */
   .unibar.collapsed .uni-body > *:not(.uni-row-index){display:none}
   .unibar.collapsed .uni-row-index .sectorpick{display:none}
+  /* Candle size stays visible for the same reason the index does: it changes
+     what every number on the page means, so it is not a buried preference. */
   .unibar.collapsed .uni-body{padding-bottom:12px}
   .uni-body{display:flex; flex-direction:column; gap:11px; padding:0 14px 14px;
     border-top:1px solid var(--line-soft)}
   .uni-head{padding-top:11px}
   .uni-row{gap:8px}
-  .sectorpick,.indexpick{margin-left:0; width:100%}
+  .sectorpick,.indexpick,.tfpick{margin-left:0; width:100%}
   .sectorpick select,.indexpick select{flex:1}
-  .indexpick>span,.sectorpick>span{min-width:46px}
+  .indexpick>span,.sectorpick>span,.tfpick>span{min-width:62px}
+  .tfpick .chips{flex:1}
+  .tfpick .chip{flex:1; justify-content:center; min-height:40px}
   .chip{padding:9px 12px; font-size:13px; border-radius:3px}
 
   .riskbar{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:12px 14px; margin-top:10px}
@@ -318,10 +327,11 @@ footer b{color:var(--muted); font-weight:600}
   <header class="mast">
     <div>
       <h1>Midcap Reversal Desk</h1>
-      <p class="sub">Bullish RSI divergences across the index you choose, scanned nightly on real NSE data and sized by the risk-per-trade rule.</p>
+      <p class="sub">Bullish RSI divergences across the index and candle size you choose, scanned nightly on real NSE data and sized by the risk-per-trade rule.</p>
+      <p id="formingNote"></p>
     </div>
     <div class="stamp">
-      <div class="cell"><span class="eyebrow">Close</span><span class="val" id="asOf">—</span></div>
+      <div class="cell"><span class="eyebrow" id="closeLabel">Close</span><span class="val" id="asOf">—</span></div>
       <div class="cell"><span class="eyebrow">Scanned</span><span class="val" id="trackCount">—</span></div>
       <div class="cell"><span class="eyebrow">Triggered</span><span class="val" id="fireCount">—</span></div>
       <div class="cell"><span class="eyebrow">Armed</span><span class="val" id="armCount">—</span></div>
@@ -344,6 +354,10 @@ footer b{color:var(--muted); font-weight:600}
         <span>Index</span>
         <select class="sel" id="uniSel"></select>
       </label>
+      <div class="tfpick">
+        <span>Candles</span>
+        <div class="chips" id="tfChips"></div>
+      </div>
       <label class="sectorpick">
         <span>Sector</span>
         <select class="sel" id="sectorSel"><option value="">All sectors</option></select>
@@ -470,6 +484,7 @@ footer b{color:var(--muted); font-weight:600}
   var filter='all', search='', sortBy='state', openRow=null;
   var uni='all', sector='', sel={momentum:false, strength:false, liquid:false};
   var poolRows = [];   // the chosen index, states recomputed, before the other filters
+  var timeframe = 'daily';   // which candle size every number on the page refers to
   var picked=[], agreeMode='all';
   var KEY='midcap-reversal-desk';
   var COLS=13;
@@ -484,12 +499,13 @@ footer b{color:var(--muted); font-weight:600}
       var raw = localStorage.getItem(KEY);
       if(raw){ var s = JSON.parse(raw); cfg = Object.assign(cfg, s.cfg||{}); over = s.over||{}; sel = Object.assign(sel, s.sel||{}); picked = s.picked||[];
         if(typeof s.uni === 'string') uni = s.uni;
-        if(typeof s.sector === 'string') sector = s.sector; }
+        if(typeof s.sector === 'string') sector = s.sector;
+        if(typeof s.timeframe === 'string') timeframe = s.timeframe; }
     }catch(e){ /* private mode or blocked storage: run with defaults */ }
   }
   function save(){
     try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg, over:over, sel:sel, picked:picked,
-      uni:uni, sector:sector})); }catch(e){}
+      uni:uni, sector:sector, timeframe:timeframe})); }catch(e){}
   }
 
   function rptNow(){ return cfg.totalRisk / 50; }
@@ -533,7 +549,21 @@ footer b{color:var(--muted); font-weight:600}
     };
   }
 
-  function row(r){
+  // Flatten a stock onto the candle size you're viewing. Everything downstream
+  // then sees exactly the shape it always saw -- price, rsi, setups, levels --
+  // except they now belong to the chosen timeframe. A data.json written before
+  // timeframes existed has no .tf, and falls through unchanged as daily.
+  function forTf(r0){
+    var t = r0 && r0.tf && r0.tf[timeframe];
+    if(!t) return r0;
+    var m = {}, k;
+    for(k in r0) if(k !== 'tf') m[k] = r0[k];
+    for(k in t) m[k] = t[k];
+    return m;
+  }
+
+  function row(r0){
+    var r = forTf(r0);
     var o = over[r.symbol] || {};
     var res = (o.resistance !== undefined && o.resistance !== null) ? o.resistance : r.resistance;
     var price = r.price;
@@ -715,7 +745,7 @@ footer b{color:var(--muted); font-weight:600}
         '<span class="h"></span><span class="h">Price</span><span class="h">RSI</span>'+
         '<span>'+esc(m.dateA)+'</span><span class="n">'+INR.format(m.lowA)+'</span><span class="n">'+m.rsiA+'</span>'+
         '<span>'+esc(m.dateB)+'</span><span class="n">'+INR.format(m.lowB)+'</span><span class="n">'+m.rsiB+'</span>'+
-      '</div><div class="verdict ok">Lower bottom on price, higher bottom on RSI — the divergence holds.</div>'
+      '</div><div class="verdict ok">Lower bottom on price, higher bottom on RSI on '+esc(tfLabel(timeframe).toLowerCase())+' candles — the divergence holds.</div>'
       : '<div class="verdict">No divergence pair in the last '+(data.settings?data.settings.divWindow:120)+' sessions. '+
         'RSI is '+(r.rsi!=null?r.rsi:'—')+' and the 52-week range is '+money(r.low52)+' to '+money(r.high52)+'.</div>';
 
@@ -757,6 +787,14 @@ footer b{color:var(--muted); font-weight:600}
         '<div class="mathrow"><span>Day change</span><span>'+(r.changePct!=null?(r.changePct>0?'+':'')+r.changePct.toFixed(2)+'%':'—')+'</span></div>'+
         '<div class="mathrow"><span>Sector</span><span>'+esc(r.industry||'—')+'</span></div>'+
         '<div class="mathrow"><span>In index</span><span>'+esc((r.universes||[]).map(uniLabel).join(', ')||'—')+'</span></div>'+
+        '<div class="mathrow"><span>Candle size</span><span>'+esc(tfLabel(timeframe))+
+          (r.barComplete === false ? ' (still forming)' : '')+'</span></div>'+
+        (Object.keys(r.agree||{}).length
+          ? '<div class="mathrow"><span>Also seen on</span><span>'+
+            esc(Object.keys(r.agree).map(function(t){
+              return setupLabel(t)+' \u2192 '+(r.agree[t]||[]).map(tfLabel).join(', ');
+            }).join('; '))+'</span></div>'
+          : '')+
         '<div class="mathrow"><span>ATR % (velocity)</span><span>'+(r.atrPct!=null?r.atrPct.toFixed(2)+'%':'—')+'</span></div>'+
         '<div class="mathrow"><span>Avg turnover ('+((data.settings&&data.settings.crsPeriod)?20:20)+'d)</span><span>'+crore(r.turnover)+'</span></div>'+
         '<div class="mathrow"><span>vs Nifty 50</span><span>'+(r.outperforming==null?'—':(r.outperforming?'outperforming':'lagging')+(r.rsGap!=null?' '+(r.rsGap>0?'+':'')+r.rsGap.toFixed(1)+'%':''))+'</span></div>'+
@@ -777,10 +815,17 @@ footer b{color:var(--muted); font-weight:600}
   };
   function setupLabel(t){ return (SETUP_META[t]||{}).label || t; }
   function setupShort(t){ return (SETUP_META[t]||{}).short || (t||'').slice(0,3).toUpperCase(); }
-  function setupBadges(types){
+  // A setup that also prints on another candle size carries a small marker.
+  // It only marks -- it does not reorder anything.
+  function setupBadges(types, agree){
     if(!types || !types.length) return '<span class="stale">—</span>';
     return types.map(function(t){
-      return '<span class="sbadge s-'+esc(t)+'" title="'+esc(setupLabel(t))+'">'+setupShort(t)+'</span>';
+      var others = ((agree||{})[t]||[]).filter(function(k){ return k !== timeframe; });
+      var mark = others.length
+        ? '<span class="agree" title="also on '+esc(others.map(tfLabel).join(' and ').toLowerCase())+
+          ' candles">+</span>' : '';
+      return '<span class="sbadge s-'+esc(t)+'" title="'+esc(setupLabel(t))+' on '+
+        esc(tfLabel(timeframe).toLowerCase())+' candles">'+setupShort(t)+'</span>'+mark;
     }).join(' ');
   }
   function uniLabel(key){
@@ -788,8 +833,46 @@ footer b{color:var(--muted); font-weight:600}
     for(var i=0;i<data.universes.length;i++) if(data.universes[i].key===key) return data.universes[i].label;
     return key;
   }
+  // Counting the OTHER timeframe means recomputing every state under different
+  // candles, so it is memoised: typing in the search box must not re-run 750
+  // rows twice. The signature covers everything that can move a state.
+  var tfCountCache = {key:null, counts:{}};
+  function tfCounts(){
+    var sig = [uni, cfg.totalRisk, cfg.atrMult, cfg.maxDeploy,
+               Object.keys(over).length, data && data.generatedAt].join('|');
+    if(tfCountCache.key === sig) return tfCountCache.counts;
+    var scope = (data.rows||[]).filter(function(r){
+      return uni === 'all' || (r.universes||[]).indexOf(uni) >= 0; });
+    var prev = timeframe, counts = {};
+    tfList().forEach(function(t){
+      timeframe = t.key;
+      var n = 0;
+      for(var i=0;i<scope.length;i++){
+        var s = row(scope[i]).state;
+        if(s === 'triggered' || s === 'armed') n++;
+      }
+      counts[t.key] = n;
+    });
+    timeframe = prev;
+    tfCountCache = {key:sig, counts:counts};
+    return counts;
+  }
+
+  function renderTimeframes(){
+    var tfs = tfList(), counts = tfCounts();
+    $('tfChips').innerHTML = tfs.map(function(t){
+      var forming = (t.barComplete === false)
+        ? ' title="this '+esc(t.label.toLowerCase())+' candle is still forming"' : '';
+      return '<button class="chip" data-tf="'+esc(t.key)+'" aria-pressed="'+
+        (timeframe===t.key)+'"'+forming+'>'+esc(t.label)+
+        (t.barComplete === false ? '<span class="agree">◦</span>' : '')+
+        '<span class="n">'+(counts[t.key]||0)+'</span></button>';
+    }).join('');
+  }
+
   function renderUniverse(){
     if(!data) return;
+    renderTimeframes();
     var list = data.universes || [];
 
     // Count what was actually scanned and carries each tag, not what NSE says
@@ -848,7 +931,7 @@ footer b{color:var(--muted); font-weight:600}
     }).join('');
     var uniName = (uni === 'all') ? (list.length>1 ? 'All indexes' : uniLabel((data.universes[0]||{}).key)) : uniLabel(uni);
     if(data.universes && data.universes.length === 1) uniName = data.universes[0].label;
-    var bits = [uniName];
+    var bits = [uniName, tfLabel(timeframe).toLowerCase() + ' candles'];
     bits.push(picked.length ? picked.map(setupShort).join('+') : 'all setups');
     if(sector) bits.push(sector);
     var onFilters = ['momentum','strength','liquid'].filter(function(k){ return sel[k]; }).length;
@@ -894,7 +977,7 @@ footer b{color:var(--muted); font-weight:600}
           '<span class="co">'+esc(r.name)+'</span></span>'+
         '<span class="mc-right">'+pill(r)+'<span class="chev">'+(open?'▴':'▾')+'</span></span>'+
       '</button>'+
-      '<div class="mc-tags">'+setupBadges(r.setupTypes)+
+      '<div class="mc-tags">'+setupBadges(r.setupTypes, r.agree)+
         '<span class="mc-chip">RSI '+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+
         (r.atrPct!=null?'<span class="mc-chip">ATR '+r.atrPct.toFixed(1)+'%</span>':'')+
         (r.outperforming!=null?'<span class="mc-chip '+(r.outperforming?'up':'')+'">'+
@@ -929,8 +1012,25 @@ footer b{color:var(--muted); font-weight:600}
   // longer has -- you took an index out of UNIVERSES, or NSE returned nothing
   // for it that morning. Left alone the page opens to an empty list with no
   // obvious way back, so fall back to Everything instead.
+  function tfList(){
+    // A file written before timeframes existed has none; it is all daily.
+    return (data && data.timeframes && data.timeframes.length)
+      ? data.timeframes : [{key:'daily', label:'Daily', barComplete:true}];
+  }
+  function tfLabel(key){
+    var l = tfList().filter(function(t){ return t.key === key; })[0];
+    return l ? l.label : key;
+  }
+
   function validateSelections(){
     if(!data) return;
+    // A remembered candle size the current file does not carry -- you removed
+    // it from TIMEFRAMES, or you are on an older data.json.
+    if(!tfList().some(function(t){ return t.key === timeframe; })){
+      timeframe = (data.baseTimeframe && tfList().some(function(t){ return t.key === data.baseTimeframe; }))
+        ? data.baseTimeframe : tfList()[0].key;
+      save();
+    }
     var list = data.universes || [];
     if(uni !== 'all'){
       var known = list.some(function(u){ return u.key === uni; });
@@ -958,7 +1058,14 @@ footer b{color:var(--muted); font-weight:600}
     var pool = poolRows.length;
     $('selCount').textContent = list.length + ' of ' + pool + ' pass';
     cards(list);
-    $('asOf').textContent = data.asOf || '—';
+    var tfMeta = tfList().filter(function(t){ return t.key === timeframe; })[0] || {};
+    $('asOf').textContent = tfMeta.lastBar || data.asOf || '—';
+    $('closeLabel').textContent = (timeframe === 'daily') ? 'Close' : (tfLabel(timeframe) + ' close');
+    $('formingNote').innerHTML = (tfMeta.barComplete === false)
+      ? '<span class="forming">this ' + esc(tfLabel(timeframe).toLowerCase()) +
+        ' candle is still forming' + (tfMeta.barEnds ? ', it closes ' + esc(tfMeta.barEnds) : '') +
+        ' \u2014 these can still change</span>'
+      : '';
     $('trackCount').textContent = String(pool);
     $('listCount').textContent = (isPhone() && list.length > shownCount)
       ? ('showing ' + Math.min(shownCount, list.length) + ' of ' + list.length)
@@ -994,7 +1101,7 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="l"><div class="symcell"><span class="tick">'+esc(r.symbol)+'</span><span class="co">'+esc(r.name)+'</span></div></td>'+
         '<td class="num">'+(r.price!=null?INR.format(r.price):'—')+'</td>'+
         '<td><span class="rsi"><span class="v">'+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+meter(r.rsi)+'</span></td>'+
-        '<td>'+setupBadges(r.setupTypes)+'</td>'+
+        '<td>'+setupBadges(r.setupTypes, r.agree)+'</td>'+
         '<td class="num '+(r.atrPct!=null&&r.atrPct>((data.settings&&data.settings.atrPctFloor)||3)?'hot':'stale')+'">'+(r.atrPct!=null?r.atrPct.toFixed(1)+'%':'—')+'</td>'+
         '<td>'+rsCell(r)+'</td>'+
         '<td><input class="cell-in num'+(r.resOverridden?' ovr':'')+'" data-sym="'+esc(r.symbol)+'" type="number" step="0.05" value="'+(r.res!=null?r.res:'')+'" aria-label="Resistance for '+esc(r.symbol)+'"></td>'+
@@ -1050,6 +1157,9 @@ footer b{color:var(--muted); font-weight:600}
     if(!b) return;
     if(b.hasAttribute('data-open')){ var s=b.getAttribute('data-open'); openRow = (openRow===s)?null:s; render(); }
     else if(b.hasAttribute('data-reset')){ var s2=b.getAttribute('data-reset'); if(over[s2]) delete over[s2].resistance; save(); render(); }
+    else if(b.hasAttribute('data-tf')){
+      timeframe = b.getAttribute('data-tf'); shownCount = pageSize; save(); render();
+    }
     else if(b.hasAttribute('data-setup')){
       var t = b.getAttribute('data-setup');
       var at = picked.indexOf(t);
