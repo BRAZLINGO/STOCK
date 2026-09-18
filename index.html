@@ -77,6 +77,9 @@ input{font:inherit; color:inherit}
 .tcard .sym{display:flex; align-items:center; gap:2px}
 .tcard .symrow{display:flex; align-items:center; gap:4px; flex-wrap:wrap}
 .rrfix{font-family:var(--mono); font-size:14px; color:var(--muted)}
+.showrow{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap}
+.andnote{font-size:12px; color:var(--faint); font-family:var(--mono)}
+body.no-target .col-target{display:none}
 tr.row.poorrr td:not(:first-child){opacity:.55}
 .mcard.poorrr{opacity:.62}
 .rrflag{font-family:var(--sans); font-size:10px; color:var(--faint); border:1px solid var(--line);
@@ -486,6 +489,11 @@ footer b{color:var(--muted); font-weight:600}
       <button class="chip" data-f="near" aria-pressed="false">Near breakout</button>
       <button class="chip" data-f="goodrr" aria-pressed="false">Meets R:R</button>
       <button class="chip" data-f="starred" aria-pressed="false">★ My watchlist</button>
+      <span class="andnote" id="andNote"></span>
+    </div>
+    <div class="showrow">
+      <span class="eyebrow">Show</span>
+      <button class="chip" data-show="target" aria-pressed="false">Target &amp; Risk:Reward</button>
     </div>
     <input class="search" id="search" type="search" placeholder="Search any scanned stock by symbol or name" autocomplete="off">
     <select class="sel" id="sort">
@@ -509,7 +517,7 @@ footer b{color:var(--muted); font-weight:600}
         <tr>
           <th class="l">Stock</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
           <th>ATR %</th><th>vs Nifty</th><th>Resistance ₹</th><th>To break</th><th>Stop ₹</th>
-          <th>Target ₹</th><th>Risk : Reward</th><th>Qty</th><th>State</th><th></th>
+          <th class="col-target">Target ₹</th><th class="col-target">Risk : Reward</th><th>Qty</th><th>State</th><th></th>
         </tr>
       </thead>
       <tbody id="tbody"><tr><td colspan="13" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
@@ -535,8 +543,11 @@ footer b{color:var(--muted); font-weight:600}
   var INR = new Intl.NumberFormat('en-IN',{maximumFractionDigits:2});
   var INR0 = new Intl.NumberFormat('en-IN',{maximumFractionDigits:0});
   var data = null, cfg = {totalRisk:100000, atrMult:1.5}, over = {};
-  var filter='all', search='', sortBy='state', openRow=null;
+  var search='', sortBy='state', openRow=null;   // `filter` became `filters`
   var uni='all', sector='', sel={momentum:false, strength:false, liquid:false};
+  var filters = [];       // ticked state filters, combined with AND
+  var showTarget = false; // Target + Risk:Reward columns, off until you ask
+  function hasFilter(k){ return filters.indexOf(k) >= 0; }
   var bypassed = false;   // search / watchlist showing the whole universe
   var poolRows = [];   // the chosen index, states recomputed, before the other filters
   var timeframe = 'daily';   // which candle size every number on the page refers to
@@ -567,12 +578,15 @@ footer b{color:var(--muted); font-weight:600}
         if(typeof s.uni === 'string') uni = s.uni;
         if(typeof s.sector === 'string') sector = s.sector;
         if(typeof s.timeframe === 'string') timeframe = s.timeframe;
-        starred = s.starred || {}; }
+        starred = s.starred || {};
+        if(Array.isArray(s.filters)) filters = s.filters;
+        if(typeof s.showTarget === 'boolean') showTarget = s.showTarget; }
     }catch(e){ /* private mode or blocked storage: run with defaults */ }
   }
   function save(){
     try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg, over:over, sel:sel, picked:picked,
-      uni:uni, sector:sector, timeframe:timeframe, starred:starred})); }catch(e){}
+      uni:uni, sector:sector, timeframe:timeframe, starred:starred,
+      filters:filters, showTarget:showTarget})); }catch(e){}
   }
 
   function rptNow(){ return cfg.totalRisk / 50; }
@@ -756,20 +770,28 @@ footer b{color:var(--muted); font-weight:600}
     // pattern today is exactly the one you want to start watching. Filtering
     // those out would mean you could never find it in order to star it.
     var q = search.trim().toLowerCase();
-    bypassed = !!q || filter === 'starred';
+    bypassed = !!q || hasFilter('starred');
     if(bypassed){
       out = data.rows.filter(function(r){ return r.status !== 'nodata'; }).map(row);
       if(q) out = out.filter(function(r){
         return r.symbol.toLowerCase().indexOf(q) >= 0 ||
                (r.name || '').toLowerCase().indexOf(q) >= 0; });
-      if(filter === 'starred') out = out.filter(function(r){ return isStar(r.symbol); });
+      if(hasFilter('starred')) out = out.filter(function(r){ return isStar(r.symbol); });
     }
-    if(filter==='goodrr') out = out.filter(function(r){
-      return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); });
-    else if(filter==='triggered') out = out.filter(function(r){ return r.state==='triggered'; });
-    else if(filter==='armed') out = out.filter(function(r){ return r.state==='armed'||r.state==='triggered'; });
-    else if(filter==='oversold') out = out.filter(function(r){ return r.rsi!=null && r.rsi<30; });
-    else if(filter==='near') out = out.filter(function(r){ return r.dist!=null && r.dist>=0 && r.dist<=5; });
+    // Every ticked chip NARROWS the list -- tick three and a stock has to
+    // satisfy all three. "My watchlist" is handled above, where it also lifts
+    // the setup and selection filters, so following a quiet stock still finds it.
+    var TESTS = {
+      triggered: function(r){ return r.state === 'triggered'; },
+      armed:     function(r){ return r.state === 'armed' || r.state === 'triggered'; },
+      oversold:  function(r){ return r.rsi != null && r.rsi < 30; },
+      near:      function(r){ return r.dist != null && r.dist >= 0 && r.dist <= 5; },
+      goodrr:    function(r){ return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); }
+    };
+    filters.forEach(function(k){
+      var t = TESTS[k];
+      if(t) out = out.filter(t);
+    });
     out.sort(function(a,b){
       if(sortBy==='sym') return a.symbol.localeCompare(b.symbol);
       if(sortBy==='weight') return (b.turnover||0)-(a.turnover||0);
@@ -837,14 +859,16 @@ footer b{color:var(--muted); font-weight:600}
           '<div><div class="k">Close</div><div class="v">'+money(r.price)+'</div></div>'+
           '<div><div class="k">Entry</div><div class="v">'+money(r.entry)+'</div></div>'+
           '<div><div class="k">Stop</div><div class="v">'+money(r.stop)+'</div></div>'+
-          '<div><div class="k">Target</div><div class="v">'+money(r.target)+'</div></div>'+
-          '<div><div class="k">Risk : Reward</div><div class="v'+(r.poorRR?' thin':'')+'">'+
-            rrText(r.rr)+'</div></div>'+
+          (showTarget
+            ? '<div><div class="k">Target</div><div class="v">'+money(r.target)+'</div></div>'+
+              '<div><div class="k">Risk : Reward</div><div class="v'+(r.poorRR?' thin':'')+'">'+
+                rrText(r.rr)+'</div></div>'
+            : '')+
           '<div><div class="k">Qty</div><div class="v">'+(r.qty!=null?INR0.format(r.qty):'—')+'</div></div>'+
           '<div><div class="k">Deploy</div><div class="v'+(r.overBudget?' thin':'')+'">'+
             (r.deploy!=null?money(r.deploy,0):'—')+'</div></div>'+
           '<div><div class="k">At risk</div><div class="v">'+(r.atRisk!=null?money(r.atRisk,0):'—')+'</div></div>'+
-        '</div><div class="why">'+why+levelNote(r)+
+        '</div><div class="why">'+why+(showTarget ? levelNote(r) : '')+
           (r.overBudget?' <b>That is over a quarter of your risk capital in one position.</b>':'')+
         '</div></article>';
     }).join('')+'</div>';
@@ -1076,6 +1100,22 @@ footer b{color:var(--muted); font-weight:600}
     return counts;
   }
 
+  // Pressed states come from the model so a reload restores exactly what you
+  // left ticked, and so "All" visibly clears the rest.
+  function renderFilterChips(){
+    Array.prototype.forEach.call(document.querySelectorAll('[data-f]'), function(c){
+      var k = c.getAttribute('data-f');
+      c.setAttribute('aria-pressed', String(k === 'all' ? filters.length === 0 : hasFilter(k)));
+    });
+    Array.prototype.forEach.call(document.querySelectorAll('[data-show]'), function(c){
+      c.setAttribute('aria-pressed', String(showTarget));
+    });
+    var active = filters.filter(function(k){ return k !== 'starred'; });
+    $('andNote').textContent = active.length > 1
+      ? 'all ' + active.length + ' must match' : '';
+    document.body.classList.toggle('no-target', !showTarget);
+  }
+
   function renderTimeframes(){
     var tfs = tfList(), counts = tfCounts();
     $('tfChips').innerHTML = tfs.map(function(t){
@@ -1216,8 +1256,8 @@ footer b{color:var(--muted); font-weight:600}
         mcell('To break', toBreak, (r.dist!=null&&r.dist<=0)?'up':'')+
         mcell('Stop', money(r.stop))+
         mcell('Qty', qty)+
-        mcell('Target', money(r.target))+
-        mcell('Risk:Reward', rrText(r.rr), (r.poorRR?'stale':''))+
+        (showTarget ? mcell('Target', money(r.target)) +
+                      mcell('Risk:Reward', rrText(r.rr), (r.poorRR?'stale':'')) : '')+
         mcell('Deploy', r.deploy!=null?money(r.deploy,0):'—')+
       '</div>'+
       (open ? '<div class="mc-detail">'+drawerBody(r)+'</div>' : '')+
@@ -1373,6 +1413,7 @@ footer b{color:var(--muted); font-weight:600}
     var pool = poolRows.length;
     $('selCount').textContent = list.length + ' of ' + pool + ' pass';
     cards(list);
+    renderFilterChips();
     renderStarBanner();
     renderBacktest();
     var bmsg = bypassed
@@ -1437,8 +1478,8 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="num '+(r.dist!=null&&r.dist<=0?'up':'')+'">'+(r.dist!=null?(r.dist<=0?'broken':r.dist.toFixed(1)+'%'):'—')+
           (r.resTouches?'<span class="touch" title="price respected this level '+r.resTouches+' times">×'+r.resTouches+'</span>':'')+'</td>'+
         '<td class="num">'+(r.stop!=null?INR.format(r.stop):'—')+'</td>'+
-        '<td class="num">'+(r.target!=null?INR.format(r.target):(r.targets&&r.targets.length?INR.format(r.targets[0]):'—'))+'</td>'+
-        '<td class="num">'+rrCell(r)+'</td>'+
+        '<td class="num col-target">'+(r.target!=null?INR.format(r.target):(r.targets&&r.targets.length?INR.format(r.targets[0]):'—'))+'</td>'+
+        '<td class="num col-target">'+rrCell(r)+'</td>'+
         '<td class="num">'+(r.tooSmall?'<span class="toosmall" title="one share risks more than your risk per trade">too big</span>'
             :(r.qty!=null?INR0.format(r.qty)+(r.capped?'<span class="touch">cap</span>':'')+
             (r.overBudget?'<span class="rrflag" title="more than a quarter of your risk capital in one position — you could not hold four of these">big</span>':''):'—'))+'</td>'+
@@ -1508,10 +1549,18 @@ footer b{color:var(--muted); font-weight:600}
     else if(b.hasAttribute('data-s')){
       var k = b.getAttribute('data-s'); sel[k] = !sel[k]; save(); render();
     }
+    else if(b.hasAttribute('data-show')){
+      showTarget = !showTarget; save(); render();
+    }
     else if(b.classList.contains('chip') && b.hasAttribute('data-f')){
-      filter = b.getAttribute('data-f'); shownCount = pageSize;
-      Array.prototype.forEach.call(document.querySelectorAll('#filters .chip'), function(c){ c.setAttribute('aria-pressed', c===b?'true':'false'); });
-      render();
+      var f = b.getAttribute('data-f');
+      if(f === 'all'){ filters = []; }
+      else {
+        var at = filters.indexOf(f);
+        if(at >= 0) filters.splice(at, 1); else filters.push(f);
+      }
+      shownCount = pageSize; save();
+      render();          // render() paints the pressed states from `filters`
     }
   });
 
