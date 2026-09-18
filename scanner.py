@@ -76,8 +76,57 @@ CRS_PERIOD   = 100      # comparative relative strength average, in sessions
 ATRPCT_FLOOR = 3.0      # "momentum" floor from the notes: ATR% above 3%
 TURNOVER_DAYS = 20      # sessions averaged for the liquidity proxy
 
+# --- risk : reward ----------------------------------------------------------
+# Your rule: never take a trade whose reward is not worth the risk. 1:1 is the
+# floor nobody should trade below -- you would need to be right more than half
+# the time just to break even, before costs. 2:1 is the working minimum.
+#
+# Reward is NOT assumed. It is the distance to somewhere price can actually
+# reach: the pattern's own measured move, or the next clustered resistance,
+# whichever is nearer. A setup that cannot clear MIN_RR is shown and flagged,
+# not hidden -- you may still want it, and hiding it would hide the near misses.
+MIN_RR       = 2.0
+
 # --- setups and levels ------------------------------------------------------
-SETUPS       = ["divergence", "engulfing", "tweezer"]   # what the scan looks for
+# Bullish ones are entries. "doubletop" and "hs" are TOPPING patterns: they are
+# carried as warnings on the row and never given an entry, stop or quantity.
+SETUPS       = ["divergence", "engulfing", "tweezer",
+                "doublebottom", "invhs"]
+WARNINGS     = ["doubletop", "hs"]
+
+# double bottom / double top
+DBL_WINDOW   = 180      # bars searched for the pattern
+DBL_TOL_ATR  = 0.6      # how equal the two feet must be, in ATR
+DBL_MIN_GAP  = 6        # bars between the feet: closer than this is one dip
+DBL_MAX_GAP  = 90       # further than this and they are unrelated lows
+DBL_MIN_DEPTH_ATR = 2.0 # the peak between must stand this far clear, in ATR
+DBL_MAX_AGE  = 40       # the second foot must be this recent. Without it a W
+                        # from nine months ago is still reported as live, and
+                        # nearly every stock ends up carrying one.
+DBL_LATE_FRAC = 0.5     # if price is already this far through the measured
+                        # move, the trade is gone -- do not offer it
+
+# head and shoulders, both directions
+HS_WINDOW    = 200
+HS_MIN_GAP   = 5        # bars between shoulder and head
+HS_MAX_GAP   = 60
+HS_HEAD_ATR  = 1.0      # how far the head must stand clear of the shoulders
+HS_SHOULDER_ATR = 2.0   # how unequal the two shoulders may be
+HS_MAX_AGE   = 40       # right shoulder must be this recent
+
+# volume confirmation
+VOL_LOOKBACK = 20       # bars averaged for "normal" volume
+VOL_CONFIRM_MULT = 1.2  # signal bar must beat the average by this much
+
+# --- backtest ---------------------------------------------------------------
+BACKTEST      = True    # set False to skip it and shorten the run
+BT_SAMPLE     = 200     # stocks sampled. Five years x 200 names already gives
+                        # thousands of occurrences per pattern; scanning all
+                        # 750 would cost minutes to change a number in the
+                        # third decimal place.
+BT_TARGET_R   = 2.0     # "success" = reached this multiple of risk
+BT_TRIGGER_BARS = 20    # bars allowed for the entry to trigger at all
+BT_HOLD_BARS  = 60      # bars allowed to reach the target before giving up
 FRESH_BARS   = 5        # a candlestick setup goes stale after this many sessions
 TREND_BARS   = 10       # sessions of decline that count as "a downtrend before it"
 TWEEZER_TOL_ATR = 0.15  # how equal two lows must be, as a fraction of ATR
@@ -93,6 +142,7 @@ SWING_BARS   = 5        # bars either side that define a pivot low/high
 DIV_WINDOW   = 120      # how far back (trading days) to hunt for the two bottoms
 NEAR_PCT     = 20.0     # an armed setup further than this below its resistance
                         # is stale -- kept on the dashboard, left out of the e-mail
+WATCHLIST_FILE = "watchlist.txt"   # one NSE symbol per line, '#' for comments
 ALERT_MAX    = 30       # most lines per section in the e-mail. Across ~750
                         # stocks a full list would be unreadable; the dashboard
                         # is where you go for everything.
@@ -310,6 +360,477 @@ def find_tweezer(df: pd.DataFrame, atr: float, fresh: int = FRESH_BARS) -> list:
     return found
 
 
+# ----------------------------------------------------------------------------
+# Structural patterns: double bottom / top, head and shoulders both ways.
+#
+# These differ from the candlestick setups in one important way -- they carry a
+# MEASURED TARGET. The distance from the pattern's extreme to its neckline,
+# projected from the neckline, is where the move is conventionally expected to
+# reach. That is a real target derived from the chart, not a multiple of risk.
+# ----------------------------------------------------------------------------
+def _similar(a: float, b: float, tol: float) -> bool:
+    return abs(a - b) <= tol
+
+
+def find_double_bottom(df: pd.DataFrame, atr: float) -> list:
+    """Two lows at the same level with a peak between: a W.
+
+    The peak is the neckline. Nothing is a buy until price clears it, the stop
+    goes below the lower foot, and the target is the neckline plus the depth of
+    the pattern.
+    """
+    low, high, close = df["Low"], df["High"], df["Close"]
+    n = len(df)
+    # Enough bars for the pattern itself -- two pivots plus the gap between
+    # them -- rather than an arbitrary round number.
+    if n < DBL_MIN_GAP + SWING_BARS * 2 + 4:
+        return []
+    start = max(0, n - DBL_WINDOW)
+    lows = [i for i in pivot_lows(low) if i >= start]
+    if len(lows) < 2:
+        return []
+
+    last_price = float(close.iloc[-1])
+    unit = atr if (atr and np.isfinite(atr)) else last_price * 0.01
+    tol = unit * DBL_TOL_ATR
+    found = []
+
+    # newest pair first: a recent W matters more than one from two years ago
+    for x in range(len(lows) - 1, 0, -1):
+        for y in range(x - 1, -1, -1):
+            a, b = lows[y], lows[x]
+            gap = b - a
+            if gap < DBL_MIN_GAP or gap > DBL_MAX_GAP:
+                continue
+            la, lb = float(low.iloc[a]), float(low.iloc[b])
+            if not _similar(la, lb, tol):
+                continue
+            seg = high.iloc[a:b + 1]
+            neck = float(seg.max())
+            foot = min(la, lb)
+            depth = neck - foot
+            # A W that is barely a W is noise, not a pattern.
+            if depth < unit * DBL_MIN_DEPTH_ATR:
+                continue
+            if n - 1 - b > DBL_MAX_AGE:
+                continue
+            # Already halfway to the measured move? The trade has left.
+            if last_price > neck + depth * DBL_LATE_FRAC:
+                continue
+            found.append({
+                "type": "doublebottom", "label": "Double bottom",
+                "direction": "long",
+                "date": df.index[b].strftime("%Y-%m-%d"),
+                "ageBars": n - 1 - b,
+                "entry": round(neck, 2),
+                "stop": round(foot - unit * 0.25, 2),
+                "measured": round(neck + depth, 2),
+                "detail": (f"Two feet at {round(la, 2)} and {round(lb, 2)}, "
+                           f"neckline {round(neck, 2)}. Measured move "
+                           f"{round(neck + depth, 2)}."),
+            })
+            break                      # one pairing per right-hand foot
+        if found:
+            break                      # only the most recent W
+    return found
+
+
+def find_double_top(df: pd.DataFrame, atr: float) -> list:
+    """The bearish mirror: two highs at one level with a trough between.
+
+    This is a WARNING, never a buy. It says the level above has been rejected
+    twice, so it is marked on the row and left out of the sizing entirely.
+    """
+    low, high, close = df["Low"], df["High"], df["Close"]
+    n = len(df)
+    if n < DBL_MIN_GAP + SWING_BARS * 2 + 4:
+        return []
+    start = max(0, n - DBL_WINDOW)
+    highs = [i for i in pivot_highs(high) if i >= start]
+    if len(highs) < 2:
+        return []
+
+    last_price = float(close.iloc[-1])
+    unit = atr if (atr and np.isfinite(atr)) else last_price * 0.01
+    tol = unit * DBL_TOL_ATR
+
+    for x in range(len(highs) - 1, 0, -1):
+        for y in range(x - 1, -1, -1):
+            a, b = highs[y], highs[x]
+            gap = b - a
+            if gap < DBL_MIN_GAP or gap > DBL_MAX_GAP:
+                continue
+            ha, hb = float(high.iloc[a]), float(high.iloc[b])
+            if not _similar(ha, hb, tol):
+                continue
+            neck = float(low.iloc[a:b + 1].min())
+            crest = max(ha, hb)
+            height = crest - neck
+            if height < unit * DBL_MIN_DEPTH_ATR:
+                continue
+            if n - 1 - b > DBL_MAX_AGE:
+                continue
+            return [{
+                "type": "doubletop", "label": "Double top",
+                "direction": "warn",
+                "date": df.index[b].strftime("%Y-%m-%d"),
+                "ageBars": n - 1 - b,
+                "level": round(neck, 2),
+                "broken": bool(last_price < neck),
+                "detail": (f"Rejected twice near {round(crest, 2)}. "
+                           f"Support to lose is {round(neck, 2)}."),
+            }]
+    return []
+
+
+def _shoulders(pivots: list, values, unit: float, invert: bool):
+    """Three pivots forming a head with a shoulder either side."""
+    for k in range(len(pivots) - 1, 1, -1):
+        r = pivots[k]
+        for j in range(k - 1, 0, -1):
+            h = pivots[j]
+            for i in range(j - 1, -1, -1):
+                ls = pivots[i]
+                if not (HS_MIN_GAP <= h - ls <= HS_MAX_GAP):
+                    continue
+                if not (HS_MIN_GAP <= r - h <= HS_MAX_GAP):
+                    continue
+                vl, vh, vr = (float(values.iloc[ls]), float(values.iloc[h]),
+                              float(values.iloc[r]))
+                head_ok = (vh < vl and vh < vr) if invert else (vh > vl and vh > vr)
+                if not head_ok:
+                    continue
+                # the head has to stand clear of both shoulders
+                if min(abs(vh - vl), abs(vh - vr)) < unit * HS_HEAD_ATR:
+                    continue
+                # and the shoulders should roughly match each other
+                if abs(vl - vr) > unit * HS_SHOULDER_ATR:
+                    continue
+                return ls, h, r
+    return None
+
+
+def find_inverse_hs(df: pd.DataFrame, atr: float) -> list:
+    """Inverse head and shoulders -- three lows, the middle one deepest.
+
+    The bullish one. Neckline is the highest point between the shoulders; the
+    target is the neckline plus the drop from neckline to head.
+    """
+    low, high, close = df["Low"], df["High"], df["Close"]
+    n = len(df)
+    start = max(0, n - HS_WINDOW)
+    lows = [i for i in pivot_lows(low) if i >= start]
+    if len(lows) < 3:
+        return []
+    last_price = float(close.iloc[-1])
+    unit = atr if (atr and np.isfinite(atr)) else last_price * 0.01
+
+    hit = _shoulders(lows, low, unit, invert=True)
+    if not hit:
+        return []
+    ls, head, rs = hit
+    if n - 1 - rs > HS_MAX_AGE:
+        return []
+    neck = float(high.iloc[ls:rs + 1].max())
+    depth = neck - float(low.iloc[head])
+    if depth <= 0 or last_price > neck + depth * DBL_LATE_FRAC:
+        return []
+    return [{
+        "type": "invhs", "label": "Inverse head & shoulders",
+        "direction": "long",
+        "date": df.index[rs].strftime("%Y-%m-%d"),
+        "ageBars": n - 1 - rs,
+        "entry": round(neck, 2),
+        "stop": round(float(low.iloc[rs]) - unit * 0.25, 2),
+        "measured": round(neck + depth, 2),
+        "detail": (f"Head {round(float(low.iloc[head]), 2)} between shoulders "
+                   f"{round(float(low.iloc[ls]), 2)} and "
+                   f"{round(float(low.iloc[rs]), 2)}; neckline {round(neck, 2)}."),
+    }]
+
+
+def find_head_shoulders(df: pd.DataFrame, atr: float) -> list:
+    """Standard head and shoulders -- three highs, middle one tallest.
+
+    A topping pattern, so a WARNING on the row rather than an entry.
+    """
+    low, high, close = df["Low"], df["High"], df["Close"]
+    n = len(df)
+    start = max(0, n - HS_WINDOW)
+    highs = [i for i in pivot_highs(high) if i >= start]
+    if len(highs) < 3:
+        return []
+    last_price = float(close.iloc[-1])
+    unit = atr if (atr and np.isfinite(atr)) else last_price * 0.01
+
+    hit = _shoulders(highs, high, unit, invert=False)
+    if not hit:
+        return []
+    ls, head, rs = hit
+    if n - 1 - rs > HS_MAX_AGE:
+        return []
+    neck = float(low.iloc[ls:rs + 1].min())
+    return [{
+        "type": "hs", "label": "Head & shoulders",
+        "direction": "warn",
+        "date": df.index[rs].strftime("%Y-%m-%d"),
+        "ageBars": n - 1 - rs,
+        "level": round(neck, 2),
+        "broken": bool(last_price < neck),
+        "detail": (f"Head {round(float(high.iloc[head]), 2)} between shoulders; "
+                   f"neckline {round(neck, 2)} is the line to hold."),
+    }]
+
+
+def volume_state(df: pd.DataFrame, idx: int) -> dict:
+    """Did anyone actually show up for this bar?
+
+    A reversal on thin volume is a reversal nobody voted for. This compares the
+    signal bar against its own recent average rather than any absolute number,
+    so it works the same on a giant and on a microcap.
+    """
+    if "Volume" not in df.columns or idx is None or idx < 0 or idx >= len(df):
+        return {"volume": None, "volumeAvg": None, "volumeConfirmed": None}
+    vol = df["Volume"]
+    lo = max(0, idx - VOL_LOOKBACK)
+    window = vol.iloc[lo:idx]
+    if window.empty:
+        return {"volume": None, "volumeAvg": None, "volumeConfirmed": None}
+    avg = float(window.mean())
+    here = float(vol.iloc[idx])
+    if not np.isfinite(avg) or avg <= 0 or not np.isfinite(here):
+        return {"volume": None, "volumeAvg": None, "volumeConfirmed": None}
+    return {
+        "volume": round(here, 0),
+        "volumeAvg": round(avg, 0),
+        "volumeRatio": round(here / avg, 2),
+        "volumeConfirmed": bool(here >= avg * VOL_CONFIRM_MULT),
+    }
+
+
+def attach_reward(setup: dict, levels: list, price: float) -> dict:
+    """The reward half of risk:reward, and where it comes from.
+
+    Preference order, because they are not equally trustworthy:
+      1. the pattern's own measured move, when it has one
+      2. the next clustered resistance above entry -- where price is likely to
+         stall whether you like it or not
+      3. a plain multiple of risk, when the chart offers nothing
+    """
+    entry, stop = setup.get("entry"), setup.get("stop")
+    rps = setup.get("riskPerShare")
+    if not entry or not rps or rps <= 0:
+        setup["rr"] = None
+        setup["target"] = None
+        setup["targetSource"] = None
+        setup["poorRR"] = False
+        return setup
+
+    target, source = None, None
+    measured = setup.get("measured")
+    if measured and measured > entry:
+        target, source = measured, "measured move"
+
+    above = sorted((l for l in (levels or []) if l["price"] > entry * 1.002),
+                   key=lambda l: l["price"])
+    if above:
+        wall = above[0]["price"]
+        # A wall below the measured move caps what is realistically reachable.
+        if target is None or wall < target:
+            target, source = wall, "next resistance"
+
+    if target is None:
+        target = entry + rps * max(RR_TARGETS)
+        source = f"{max(RR_TARGETS)}R (no level above)"
+
+    rr = (target - entry) / rps
+    setup["target"] = round(target, 2)
+    setup["targetSource"] = source
+    setup["rr"] = round(rr, 2)
+    setup["poorRR"] = bool(rr < MIN_RR)
+    return setup
+
+
+# ----------------------------------------------------------------------------
+# Backtest: does each pattern actually earn its place?
+#
+# For every historical occurrence, wait for the entry to trigger, then see
+# whether price reached 2R before it reached the stop. That is the only
+# question worth asking of a setup, and the answer is often humbling.
+#
+# It runs on a SAMPLE of the universe, not all of it. A few hundred stocks over
+# five years already gives thousands of occurrences per pattern, and scanning
+# every one of 750 would push the daily run past its timeout for a number that
+# would not move in the third decimal place.
+# ----------------------------------------------------------------------------
+def historical_signals(df: pd.DataFrame) -> list:
+    """Every occurrence of every bullish setup across the whole series.
+
+    One pass, reusing the pivot lists, rather than re-running the detectors at
+    every bar -- which would be a thousand times more work for the same answer.
+    """
+    n = len(df)
+    if n < 60:
+        return []
+    o, h, l, c = df["Open"], df["High"], df["Low"], df["Close"]
+    atr = wilder_atr(df).to_numpy(dtype=float)
+    rsi = wilder_rsi(c).to_numpy(dtype=float)
+    lows_arr, highs_arr = l.to_numpy(float), h.to_numpy(float)
+    out = []
+
+    def unit(i):
+        a = atr[i]
+        return a if (a and np.isfinite(a) and a > 0) else float(c.iloc[i]) * 0.01
+
+    # --- candlestick setups: local, so just walk the bars -------------------
+    for i in range(TREND_BARS + 1, n):
+        if not in_downtrend(c, i - 1):
+            continue
+        po, pc = float(o.iloc[i - 1]), float(c.iloc[i - 1])
+        co, cc = float(o.iloc[i]), float(c.iloc[i])
+        if pc < po and cc > co and cc >= po and co <= pc:
+            out.append(("engulfing", i, float(h.iloc[i]), float(l.iloc[i])))
+        tol = unit(i) * TWEEZER_TOL_ATR
+        if abs(lows_arr[i] - lows_arr[i - 1]) <= tol:
+            out.append(("tweezer", i, float(h.iloc[i]),
+                        min(lows_arr[i], lows_arr[i - 1])))
+
+    plows = pivot_lows(l)
+    phighs = pivot_highs(h)
+
+    # --- RSI divergence: lower low on price, higher low on RSI --------------
+    for x in range(1, len(plows)):
+        b = plows[x]
+        for y in range(x - 1, -1, -1):
+            a = plows[y]
+            if b - a > DIV_WINDOW:
+                break
+            if lows_arr[b] >= lows_arr[a]:
+                continue
+            if not (np.isfinite(rsi[a]) and np.isfinite(rsi[b])):
+                continue
+            if rsi[b] > rsi[a]:
+                neck = float(h.iloc[a:b + 1].max())
+                out.append(("divergence", b, neck, neck - unit(b) * ATR_MULT))
+            break
+
+    # --- double bottom ------------------------------------------------------
+    for x in range(1, len(plows)):
+        b = plows[x]
+        for y in range(x - 1, -1, -1):
+            a = plows[y]
+            gap = b - a
+            if gap > DBL_MAX_GAP:
+                break
+            if gap < DBL_MIN_GAP:
+                continue
+            if abs(lows_arr[a] - lows_arr[b]) > unit(b) * DBL_TOL_ATR:
+                continue
+            neck = float(h.iloc[a:b + 1].max())
+            foot = min(lows_arr[a], lows_arr[b])
+            if neck - foot < unit(b) * DBL_MIN_DEPTH_ATR:
+                continue
+            out.append(("doublebottom", b, neck, foot - unit(b) * 0.25))
+            break
+
+    # --- inverse head and shoulders ----------------------------------------
+    for k in range(2, len(plows)):
+        r = plows[k]
+        for j in range(k - 1, 0, -1):
+            head = plows[j]
+            if not (HS_MIN_GAP <= r - head <= HS_MAX_GAP):
+                continue
+            for i in range(j - 1, -1, -1):
+                ls = plows[i]
+                if not (HS_MIN_GAP <= head - ls <= HS_MAX_GAP):
+                    continue
+                u = unit(r)
+                vl, vh, vr = lows_arr[ls], lows_arr[head], lows_arr[r]
+                if not (vh < vl and vh < vr):
+                    continue
+                if min(abs(vh - vl), abs(vh - vr)) < u * HS_HEAD_ATR:
+                    continue
+                if abs(vl - vr) > u * HS_SHOULDER_ATR:
+                    continue
+                neck = float(h.iloc[ls:r + 1].max())
+                out.append(("invhs", r, neck, vr - u * 0.25))
+                break
+            else:
+                continue
+            break
+    return out
+
+
+def evaluate_signal(df: pd.DataFrame, i: int, entry: float, stop: float) -> str:
+    """Wait for the trigger, then race the stop against the 2R target.
+
+    Returns 'win', 'loss', 'open' (neither inside the horizon) or '' when the
+    entry never triggered at all.
+    """
+    if not (entry and stop) or entry <= stop:
+        return ""
+    high, low = df["High"].to_numpy(float), df["Low"].to_numpy(float)
+    n = len(df)
+    fire = None
+    for j in range(i + 1, min(n, i + 1 + BT_TRIGGER_BARS)):
+        if high[j] >= entry:
+            fire = j
+            break
+    if fire is None:
+        return ""
+    risk = entry - stop
+    target = entry + risk * BT_TARGET_R
+    for j in range(fire, min(n, fire + BT_HOLD_BARS)):
+        hit_stop = low[j] <= stop
+        hit_target = high[j] >= target
+        # Same bar touched both: assume the worse outcome rather than
+        # flattering the pattern. Without intraday data there is no way to
+        # know which came first, and an optimistic guess here would quietly
+        # inflate every number on the page.
+        if hit_stop:
+            return "loss"
+        if hit_target:
+            return "win"
+    return "open"
+
+
+def backtest_patterns(frames: dict, symbols: list) -> dict:
+    """Aggregate hit rates per pattern and timeframe across a sample."""
+    stats = {}
+    scanned = 0
+    for sym in symbols:
+        daily = frames.get(sym)
+        if daily is None or len(daily) < 120:
+            continue
+        scanned += 1
+        for tf in TIMEFRAMES:
+            frame = resample_tf(daily, tf)
+            if len(frame) < 80:
+                continue
+            try:
+                signals = historical_signals(frame)
+            except Exception:  # noqa: BLE001
+                continue
+            for kind, i, entry, stop in signals:
+                verdict = evaluate_signal(frame, i, entry, stop)
+                if not verdict:
+                    continue
+                key = f"{kind}|{tf}"
+                rec = stats.setdefault(key, {"pattern": kind, "timeframe": tf,
+                                             "win": 0, "loss": 0, "open": 0})
+                rec[verdict] += 1
+
+    out = []
+    for rec in stats.values():
+        decided = rec["win"] + rec["loss"]
+        rec["n"] = decided + rec["open"]
+        rec["hitRate"] = round(rec["win"] / decided * 100, 1) if decided else None
+        out.append(rec)
+    out.sort(key=lambda r: (r["timeframe"], -(r["hitRate"] or 0)))
+    return {"sample": scanned, "targetR": BT_TARGET_R,
+            "holdBars": BT_HOLD_BARS, "rows": out}
+
+
 def size_setup(setup: dict, price: float) -> dict:
     """Attach the risk maths to one setup, using ITS own entry and stop."""
     entry, stop = setup.get("entry"), setup.get("stop")
@@ -501,15 +1022,41 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
     if "tweezer" in SETUPS:
         for s in find_tweezer(df, last_atr):
             setups.append(size_setup(s, last_price))
+    if "doublebottom" in SETUPS:
+        for s in find_double_bottom(df, last_atr):
+            setups.append(size_setup(s, last_price))
+    if "invhs" in SETUPS:
+        for s in find_inverse_hs(df, last_atr):
+            setups.append(size_setup(s, last_price))
+
+    # Everything above is an entry, so everything above gets a reward, a target
+    # and a real risk:reward ratio derived from the chart.
+    for s in setups:
+        s.setdefault("direction", "long")
+        attach_reward(s, levels, last_price)
+        # Volume on the bar the signal printed on, not on today.
+        age = s.get("ageBars")
+        sig_idx = (len(df) - 1 - age) if isinstance(age, int) else len(df) - 1
+        s.update(volume_state(df, sig_idx))
+
+    # --- topping patterns: warnings, never entries -------------------------
+    warnings = []
+    if "doubletop" in WARNINGS:
+        warnings.extend(find_double_top(df, last_atr))
+    if "hs" in WARNINGS:
+        warnings.extend(find_head_shoulders(df, last_atr))
+    for w in warnings:
+        w["direction"] = "warn"
 
     # one setup leads the row; the rest stay visible in the drawer
     primary = None
     sized = [s for s in setups if s.get("riskPerShare")]
     if sized:
-        # prefer setups that size to at least one share, then triggered ones,
-        # then apply the stop-width rule
+        # prefer setups that size to at least one share, then ones that clear
+        # the minimum risk:reward, then triggered ones, then the stop-width rule
         buyable = [s for s in sized if s.get("qty")] or sized
-        fired = [s for s in buyable if s["state"] == "triggered"] or buyable
+        worth = [s for s in buyable if not s.get("poorRR")] or buyable
+        fired = [s for s in worth if s["state"] == "triggered"] or worth
         primary = (min(fired, key=lambda s: s["riskPerShare"])
                    if PRIMARY_RULE == "tightest"
                    else max(fired, key=lambda s: s["riskPerShare"]))
@@ -556,6 +1103,14 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         "rsGap": rs_gap,
         "targets": targets,
         "setups": setups,
+        "warnings": warnings,
+        "warningTypes": sorted({w["type"] for w in warnings}),
+        "rr": (primary or {}).get("rr"),
+        "target": (primary or {}).get("target"),
+        "targetSource": (primary or {}).get("targetSource"),
+        "poorRR": bool((primary or {}).get("poorRR")),
+        "volumeConfirmed": (primary or {}).get("volumeConfirmed"),
+        "volumeRatio": (primary or {}).get("volumeRatio"),
         "setupTypes": sorted({s["type"] for s in setups}),
         "primary": primary["type"] if primary else None,
         "resTouches": res_touches,
@@ -776,6 +1331,23 @@ def main() -> int:
             print(f"  {sym}: {exc}", flush=True)
             missing.append(sym)
 
+    backtest = None
+    if BACKTEST:
+        # Evenly spaced across the watchlist so the sample spans large, mid,
+        # small and micro caps rather than whichever names sort first.
+        have = [r["symbol"] for r in watchlist if r["symbol"] in frames]
+        step = max(1, len(have) // BT_SAMPLE)
+        sample = have[::step][:BT_SAMPLE]
+        print(f"backtesting {len(sample)} of {len(have)} stocks "
+              f"({BT_TARGET_R:.0f}R target, {BT_HOLD_BARS}-bar horizon)", flush=True)
+        t0 = time.time()
+        backtest = backtest_patterns(frames, sample)
+        print(f"  took {time.time() - t0:.0f}s", flush=True)
+        for rec in backtest["rows"]:
+            rate = f"{rec['hitRate']}%" if rec["hitRate"] is not None else "n/a"
+            print(f"  {rec['pattern']:<14} {rec['timeframe']:<7} "
+                  f"{rate:>6} of {rec['win'] + rec['loss']:>5} decided", flush=True)
+
     rank = {"triggered": 0, "armed": 1, "oversold": 2, "overbought": 3,
             "watching": 4, "nodata": 5}
     rows.sort(key=lambda r: (rank.get(r["status"], 9), -(r.get("turnover") or 0)))
@@ -794,6 +1366,8 @@ def main() -> int:
             "crsPeriod": CRS_PERIOD, "atrPctFloor": ATRPCT_FLOOR,
             "benchmark": "Nifty 50", "hasBenchmark": bench is not None,
         },
+        "backtest": backtest,
+        "minRR": MIN_RR,
         "baseTimeframe": BASE_TF,
         "timeframes": [
             {"key": tf, "label": TF_LABEL.get(tf, tf),
@@ -851,8 +1425,50 @@ def main() -> int:
                          for o in tfs if o != tf})
         return f", also {'/'.join(TF_LABEL.get(o, o).lower() for o in others)}" if others else ""
 
+    # --- your own watchlist leads the e-mail --------------------------------
+    # watchlist.txt is one NSE symbol per line, '#' for comments. The star
+    # button on the dashboard has a Copy button that produces exactly this.
+    follow = []
+    if os.path.exists(WATCHLIST_FILE):
+        try:
+            with open(WATCHLIST_FILE, encoding="utf-8") as fh:
+                follow = [ln.strip().upper() for ln in fh
+                          if ln.strip() and not ln.strip().startswith("#")]
+        except Exception as exc:  # noqa: BLE001
+            print(f"could not read {WATCHLIST_FILE} ({exc})", flush=True)
+    if follow:
+        print(f"watchlist: following {len(follow)} stock(s)", flush=True)
+
     lines = [f"# Midcap Reversal Desk -- {as_of}", ""]
     counts = {"triggered": 0, "armed": 0}
+
+    if follow:
+        want = set(follow)
+        mine = []
+        for tf in TIMEFRAMES:
+            for r in rows:
+                if r["symbol"] not in want:
+                    continue
+                v = view(r, tf)
+                if v.get("status") in ("triggered", "armed"):
+                    mine.append((tf, r, v))
+        lines.append(f"# Your watchlist ({len(mine)} of {len(follow)} set up)")
+        lines.append("")
+        if mine:
+            for tf, r, v in mine:
+                rr = f", R:R {v['rr']}:1" if v.get("rr") else ""
+                lines.append(
+                    f"- **{v['symbol']}** {v['status']} on {TF_LABEL.get(tf, tf).lower()} "
+                    f"at Rs {v['price']:,} -- entry {v.get('entry')}, "
+                    f"stop {v.get('stop')}{rr}{agree_note(r, tf)}"
+                )
+        else:
+            lines.append("_Nothing on your list is set up today._")
+        lines.append("")
+        missing_syms = sorted(want - {r["symbol"] for r in rows})
+        if missing_syms:
+            lines.append(f"_Not in the scanned universe: {', '.join(missing_syms[:15])}_")
+            lines.append("")
 
     # One section per candle size. A line that does not say which chart it came
     # from is useless: a daily tweezer and a weekly tweezer are different trades.
@@ -946,7 +1562,10 @@ def main() -> int:
     gh_out = os.environ.get("GITHUB_OUTPUT")
     if gh_out:
         with open(gh_out, "a", encoding="utf-8") as fh:
-            fh.write(f"has_alerts={'true' if (counts['triggered'] or counts['armed']) else 'false'}\n")
+            watch_hit = bool(follow) and any(
+                view(r, tf).get("status") in ("triggered", "armed")
+                for tf in TIMEFRAMES for r in rows if r["symbol"] in set(follow))
+            fh.write(f"has_alerts={'true' if (counts['triggered'] or counts['armed'] or watch_hit) else 'false'}\n")
             fh.write(f"subject=Reversal desk: {counts['triggered']} triggered, "
                      f"{counts['armed']} armed across "
                      f"{len(TIMEFRAMES)} timeframes ({as_of})\n")

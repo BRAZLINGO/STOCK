@@ -70,6 +70,39 @@ input{font:inherit; color:inherit}
 .tfpick .chip[aria-pressed="true"]{font-weight:600}
 .forming{font-size:12px; color:var(--brass); font-family:var(--mono)}
 .agree{font-family:var(--mono); font-size:10px; color:var(--brass); margin-left:2px; vertical-align:super}
+.slash{color:var(--faint); margin:0 2px; font-size:11px}
+.rr{font-family:var(--mono); font-variant-numeric:tabular-nums}
+.rr.poor{color:var(--faint)}
+tr.row.poorrr td:not(:first-child){opacity:.55}
+.mcard.poorrr{opacity:.62}
+.rrflag{font-family:var(--sans); font-size:10px; color:var(--faint); border:1px solid var(--line);
+  border-radius:2px; padding:0 3px; margin-left:4px}
+.warnbadge{font-family:var(--sans); font-size:10px; font-weight:600; color:#b3261e;
+  border:1px solid #b3261e; border-radius:2px; padding:0 4px; margin-left:4px; white-space:nowrap}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .warnbadge{color:#ff8a80; border-color:#ff8a80}}
+.star{background:none; border:0; cursor:pointer; font-size:15px; line-height:1; padding:2px 4px;
+  color:var(--line); min-width:26px}
+.star.on{color:var(--brass)}
+.volok{font-family:var(--mono); font-size:10px; color:var(--brass); margin-left:3px}
+.btwrap{margin-top:26px; border:1px solid var(--line); border-radius:4px; padding:14px 16px;
+  background:var(--surface); max-width:100%}
+/* The table scrolls inside its own box rather than dragging the whole page
+   sideways, which is what five columns do on a 390px screen. */
+.bt-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch}
+.btwrap h3{font-size:14px; margin:0 0 4px}
+.bt-note{font-size:12.5px; color:var(--faint); margin-bottom:10px}
+.bt{width:100%; min-width:430px; border-collapse:collapse; font-size:13px}
+.bt th{text-align:left; font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--faint); font-weight:600; padding:4px 8px 4px 0; border-bottom:1px solid var(--line)}
+.bt td{padding:5px 8px 5px 0; border-bottom:1px solid var(--line-soft);
+  font-variant-numeric:tabular-nums; text-align:left; vertical-align:middle}
+.bt td.n{font-family:var(--mono)}
+.bt tr.below td{color:var(--faint)}
+.bt .edge{font-family:var(--mono); font-weight:600}
+.bt .edge.pos{color:var(--brass)}
+.starbanner{margin-top:12px; padding:11px 14px; border:1px solid var(--brass-line);
+  background:var(--brass-soft); border-radius:4px; font-size:14px}
+.starbanner b{color:var(--brass)}
 .tfnote{font-size:12px; color:var(--faint); font-family:var(--mono)}
 .chip .n{font-family:var(--mono); font-size:11px; opacity:.75; margin-left:5px}
 .riskbar{display:flex; flex-wrap:wrap; align-items:center; gap:10px 26px; margin-top:12px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-radius:4px}
@@ -119,6 +152,8 @@ input{font:inherit; color:inherit}
 .s-divergence{color:var(--sprout); border-color:var(--sprout-line)}
 .s-engulfing{color:var(--brass); border-color:var(--brass-line)}
 .s-tweezer{color:var(--tweez); border-color:currentColor}
+.s-doublebottom{color:var(--sprout); border-color:var(--sprout-line)}
+.s-invhs{color:var(--brass); border-color:var(--brass-line)}
 .touch{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-left:5px}
 .toosmall{font-family:var(--display); font-size:10px; font-weight:600; letter-spacing:.05em;
   text-transform:uppercase; color:var(--clay)}
@@ -280,6 +315,7 @@ footer b{color:var(--muted); font-weight:600}
   .indexpick>span,.sectorpick>span,.tfpick>span{min-width:62px}
   .tfpick .chips{flex:1}
   .tfpick .chip{flex:1; justify-content:center; min-height:40px}
+  .star{font-size:19px; padding:8px 10px; min-width:42px; min-height:42px}
   .chip{padding:9px 12px; font-size:13px; border-radius:3px}
 
   .riskbar{display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:12px 14px; margin-top:10px}
@@ -339,6 +375,7 @@ footer b{color:var(--muted); font-weight:600}
   </header>
 
   <div id="demoZone"></div>
+  <div id="starBanner"></div>
 
   <section class="unibar" id="unibar">
     <button class="ctrltoggle" id="ctrlToggle" aria-expanded="true">
@@ -393,6 +430,10 @@ footer b{color:var(--muted); font-weight:600}
       <label for="maxDeploy">Max per trade ₹</label>
       <input class="inp num" id="maxDeploy" type="number" min="0" step="5000" placeholder="no cap">
     </div>
+    <div class="field">
+      <label for="minRR">Min R:R</label>
+      <input class="inp num" id="minRR" type="number" min="1" step="0.5" value="2" style="width:66px">
+    </div>
     <span class="formula">RPT = total risk ÷ 50</span>
     <div class="rpt"><span class="k">Risk per trade</span><span class="v num" id="rptVal">₹2,000</span></div>
   </div>
@@ -434,6 +475,8 @@ footer b{color:var(--muted); font-weight:600}
       <button class="chip" data-f="armed" aria-pressed="false">Armed</button>
       <button class="chip" data-f="oversold" aria-pressed="false">RSI &lt; 30</button>
       <button class="chip" data-f="near" aria-pressed="false">Near breakout</button>
+      <button class="chip" data-f="goodrr" aria-pressed="false">Meets R:R</button>
+      <button class="chip" data-f="starred" aria-pressed="false">★ My watchlist</button>
     </div>
     <input class="search" id="search" type="search" placeholder="Filter symbol or name" autocomplete="off">
     <select class="sel" id="sort">
@@ -457,7 +500,7 @@ footer b{color:var(--muted); font-weight:600}
         <tr>
           <th class="l">Stock</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
           <th>ATR %</th><th>vs Nifty</th><th>Resistance ₹</th><th>To break</th><th>Stop ₹</th>
-          <th>Target ₹</th><th>Qty</th><th>State</th><th></th>
+          <th>Target ₹</th><th>R:R</th><th>Qty</th><th>State</th><th></th>
         </tr>
       </thead>
       <tbody id="tbody"><tr><td colspan="13" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
@@ -472,6 +515,7 @@ footer b{color:var(--muted); font-weight:600}
     <div><b>Data</b> is end-of-day from Yahoo Finance, refreshed by a scheduled scan after the NSE close. RSI and ATR are Wilder's, the same definitions your charting platform plots. Levels you override and notes you write are stored in this browser only.</div>
     <div>This is a rules engine for a strategy you defined, not investment advice, and it knows nothing about your circumstances. Confirm every level on your own chart before placing an order.</div>
     <div id="missingNote"></div>
+    <div id="btZone"></div>
   </footer>
 </div>
 
@@ -485,6 +529,9 @@ footer b{color:var(--muted); font-weight:600}
   var uni='all', sector='', sel={momentum:false, strength:false, liquid:false};
   var poolRows = [];   // the chosen index, states recomputed, before the other filters
   var timeframe = 'daily';   // which candle size every number on the page refers to
+  var starred = {};          // symbols you follow
+  function minRR(){ return (cfg.minRR != null) ? cfg.minRR : ((data && data.minRR) || 2); }
+  function isStar(sym){ return !!starred[sym]; }
   var picked=[], agreeMode='all';
   var KEY='midcap-reversal-desk';
   var COLS=13;
@@ -500,12 +547,13 @@ footer b{color:var(--muted); font-weight:600}
       if(raw){ var s = JSON.parse(raw); cfg = Object.assign(cfg, s.cfg||{}); over = s.over||{}; sel = Object.assign(sel, s.sel||{}); picked = s.picked||[];
         if(typeof s.uni === 'string') uni = s.uni;
         if(typeof s.sector === 'string') sector = s.sector;
-        if(typeof s.timeframe === 'string') timeframe = s.timeframe; }
+        if(typeof s.timeframe === 'string') timeframe = s.timeframe;
+        starred = s.starred || {}; }
     }catch(e){ /* private mode or blocked storage: run with defaults */ }
   }
   function save(){
     try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg, over:over, sel:sel, picked:picked,
-      uni:uni, sector:sector, timeframe:timeframe})); }catch(e){}
+      uni:uni, sector:sector, timeframe:timeframe, starred:starred})); }catch(e){}
   }
 
   function rptNow(){ return cfg.totalRisk / 50; }
@@ -536,9 +584,19 @@ footer b{color:var(--muted); font-weight:600}
       if(byCapital < qty){ qty = Math.max(byCapital, 0); capped = true; }
     }
     var tooSmall = !!(rps && qty === 0);
+    // Risk:reward is recomputed here rather than trusted from the file,
+    // because your risk capital and ATR multiple move the entry and the stop.
+    // The TARGET does not move -- it is a price on the chart (the pattern's
+    // measured move, or the next resistance), so it stays as the scan found it.
+    var target = (sx.target != null) ? sx.target : null;
+    var rr = (target != null && entry != null && rps) ? (target - entry) / rps : null;
+    if(rr != null && !isFinite(rr)) rr = null;
     return {
       tooSmall:tooSmall, capped:capped,
       capitalForOne: tooSmall ? rps * 50 : null,
+      target:target, targetSource:sx.targetSource, rr:rr,
+      poorRR: (rr != null && rr < minRR()),
+      volumeConfirmed: sx.volumeConfirmed, volumeRatio: sx.volumeRatio,
       type:sx.type, label:sx.label || setupLabel(sx.type), date:sx.date, detail:sx.detail,
       entry:entry, stop:stop, rps:rps, qty:qty, mults:mults,
       deploy:(qty!=null&&entry!=null)?qty*entry:null,
@@ -584,7 +642,8 @@ footer b{color:var(--muted); font-weight:600}
 
     // No real setup? Still show what the levels imply, but run it through the
     // SAME maths so the capital ceiling and the too-small check apply here too.
-    var shown = lead || setupMaths({type:'divergence', entry:res, stop:null}, r, res);
+    var shown = lead || setupMaths({type:'divergence', entry:res, stop:null,
+      target:r.target, targetSource:r.targetSource}, r, res);
     var entry = shown.entry, rps = shown.rps, stop = shown.stop, qty = shown.qty;
     var targets = shown.targets, mults = shown.mults;
 
@@ -605,6 +664,11 @@ footer b{color:var(--muted); font-weight:600}
       atRisk:(qty!=null&&rps!=null)?qty*rps:null, broke:broke, dist:dist,
       state:state, label:label, note:o.note||'', targets:targets, mults:mults,
       tooSmall:shown.tooSmall, capped:shown.capped, capitalForOne:shown.capitalForOne,
+      // From `shown`, not from the file: your risk capital and ATR multiple
+      // move the entry and the stop, so the ratio has to move with them.
+      target:shown.target, targetSource:shown.targetSource,
+      rr:shown.rr, poorRR:shown.poorRR,
+      volumeConfirmed:shown.volumeConfirmed, volumeRatio:shown.volumeRatio,
       sxs:sxs, lead:lead
     });
   }
@@ -663,7 +727,9 @@ footer b{color:var(--muted); font-weight:600}
     }
     var q = search.trim().toLowerCase();
     if(q) out = out.filter(function(r){ return r.symbol.toLowerCase().indexOf(q)>=0 || r.name.toLowerCase().indexOf(q)>=0; });
-    if(filter==='triggered') out = out.filter(function(r){ return r.state==='triggered'; });
+    if(filter==='goodrr') out = out.filter(function(r){ return r.rr != null && r.rr >= minRR(); });
+    else if(filter==='starred') out = out.filter(function(r){ return isStar(r.symbol); });
+    else if(filter==='triggered') out = out.filter(function(r){ return r.state==='triggered'; });
     else if(filter==='armed') out = out.filter(function(r){ return r.state==='armed'||r.state==='triggered'; });
     else if(filter==='oversold') out = out.filter(function(r){ return r.rsi!=null && r.rsi<30; });
     else if(filter==='near') out = out.filter(function(r){ return r.dist!=null && r.dist>=0 && r.dist<=5; });
@@ -787,6 +853,17 @@ footer b{color:var(--muted); font-weight:600}
         '<div class="mathrow"><span>Day change</span><span>'+(r.changePct!=null?(r.changePct>0?'+':'')+r.changePct.toFixed(2)+'%':'—')+'</span></div>'+
         '<div class="mathrow"><span>Sector</span><span>'+esc(r.industry||'—')+'</span></div>'+
         '<div class="mathrow"><span>In index</span><span>'+esc((r.universes||[]).map(uniLabel).join(', ')||'—')+'</span></div>'+
+        (r.rr != null
+          ? '<div class="mathrow"><span>Risk : reward</span><span>'+r.rr.toFixed(2)+':1'+
+            (r.poorRR ? ' (below your '+minRR()+':1)' : '')+
+            (r.targetSource ? ' \u2014 '+esc(r.targetSource) : '')+'</span></div>'
+          : '')+
+        (r.volumeConfirmed != null
+          ? '<div class="mathrow"><span>Volume on the signal</span><span>'+
+            (r.volumeConfirmed ? 'confirmed' : 'thin')+
+            (r.volumeRatio != null ? ' ('+r.volumeRatio.toFixed(1)+'x its average)' : '')+
+            '</span></div>'
+          : '')+
         '<div class="mathrow"><span>Candle size</span><span>'+esc(tfLabel(timeframe))+
           (r.barComplete === false ? ' (still forming)' : '')+'</span></div>'+
         (Object.keys(r.agree||{}).length
@@ -809,9 +886,14 @@ footer b{color:var(--muted); font-weight:600}
   }
 
   var SETUP_META = {
-    divergence:{label:'RSI divergence', short:'DIV'},
-    engulfing: {label:'Bullish engulfing', short:'ENG'},
-    tweezer:   {label:'Tweezer bottom', short:'TWZ'}
+    divergence:  {label:'RSI divergence', short:'DIV'},
+    engulfing:   {label:'Bullish engulfing', short:'ENG'},
+    tweezer:     {label:'Tweezer bottom', short:'TWZ'},
+    doublebottom:{label:'Double bottom', short:'DB'},
+    invhs:       {label:'Inverse head & shoulders', short:'IHS'},
+    // topping patterns -- warnings, never entries
+    doubletop:   {label:'Double top', short:'DT'},
+    hs:          {label:'Head & shoulders', short:'H&S'}
   };
   function setupLabel(t){ return (SETUP_META[t]||{}).label || t; }
   function setupShort(t){ return (SETUP_META[t]||{}).short || (t||'').slice(0,3).toUpperCase(); }
@@ -826,8 +908,27 @@ footer b{color:var(--muted); font-weight:600}
           ' candles">+</span>' : '';
       return '<span class="sbadge s-'+esc(t)+'" title="'+esc(setupLabel(t))+' on '+
         esc(tfLabel(timeframe).toLowerCase())+' candles">'+setupShort(t)+'</span>'+mark;
-    }).join(' ');
+    }).join('<span class="slash">/</span>');
   }
+  // R:R as the page reads it, with the reason it is what it is on hover.
+  function rrCell(r){
+    if(r.rr == null) return '<span class="stale">—</span>';
+    var poor = r.rr < minRR();
+    var why = (r.targetSource ? 'target from ' + r.targetSource : 'target');
+    return '<span class="rr'+(poor?' poor':'')+'" title="'+esc(why)+
+      ' at '+(r.target!=null?INR.format(r.target):'—')+'">'+r.rr.toFixed(1)+':1</span>'+
+      (poor ? '<span class="rrflag" title="below your minimum of '+minRR()+':1">thin</span>' : '');
+  }
+
+  // Topping patterns. Never an entry -- a flag that the chart is fighting you.
+  function warnBadges(types){
+    if(!types || !types.length) return '';
+    return types.map(function(t){
+      return '<span class="warnbadge" title="'+esc(setupLabel(t))+
+        ' \u2014 a topping pattern, not a buy">'+esc(setupShort(t))+'</span>';
+    }).join('');
+  }
+
   function uniLabel(key){
     if(!data || !data.universes) return key;
     for(var i=0;i<data.universes.length;i++) if(data.universes[i].key===key) return data.universes[i].label;
@@ -970,14 +1071,18 @@ footer b{color:var(--muted); font-weight:600}
     var toBreak = r.dist!=null ? (r.dist<=0 ? 'broken' : r.dist.toFixed(1)+'%') : '—';
     var qty = r.tooSmall ? '<span class="toosmall">too big</span>'
             : (r.qty!=null ? INR0.format(r.qty)+(r.capped?'<span class="touch">cap</span>':'') : '—');
-    return '<article class="mcard '+(r.state==='triggered'?'fire':r.state==='armed'?'armed':'')+
+    return '<article class="mcard '+(r.poorRR?'poorrr ':'')+(r.state==='triggered'?'fire':r.state==='armed'?'armed':'')+
              (open?' open':'')+'" data-card="'+esc(r.symbol)+'">'+
       '<button class="mc-head" data-open="'+esc(r.symbol)+'" aria-expanded="'+open+'">'+
         '<span class="mc-id"><span class="tick">'+esc(r.symbol)+'</span>'+
           '<span class="co">'+esc(r.name)+'</span></span>'+
         '<span class="mc-right">'+pill(r)+'<span class="chev">'+(open?'▴':'▾')+'</span></span>'+
       '</button>'+
-      '<div class="mc-tags">'+setupBadges(r.setupTypes, r.agree)+
+      '<div class="mc-tags">'+
+        '<button class="star'+(isStar(r.symbol)?' on':'')+'" data-star="'+esc(r.symbol)+
+          '" title="follow this stock" aria-pressed="'+isStar(r.symbol)+'">'+
+          (isStar(r.symbol)?'★':'☆')+'</button>'+
+        setupBadges(r.setupTypes, r.agree)+warnBadges(r.warningTypes)+
         '<span class="mc-chip">RSI '+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+
         (r.atrPct!=null?'<span class="mc-chip">ATR '+r.atrPct.toFixed(1)+'%</span>':'')+
         (r.outperforming!=null?'<span class="mc-chip '+(r.outperforming?'up':'')+'">'+
@@ -989,6 +1094,8 @@ footer b{color:var(--muted); font-weight:600}
         mcell('To break', toBreak, (r.dist!=null&&r.dist<=0)?'up':'')+
         mcell('Stop', money(r.stop))+
         mcell('Qty', qty)+
+        mcell('Target', money(r.target))+
+        mcell('R:R', r.rr!=null ? r.rr.toFixed(1)+':1' : '—', (r.poorRR?'stale':''))+
         mcell('Deploy', r.deploy!=null?money(r.deploy,0):'—')+
       '</div>'+
       (open ? '<div class="mc-detail">'+drawerBody(r)+'</div>' : '')+
@@ -1022,6 +1129,79 @@ footer b{color:var(--muted); font-weight:600}
     return l ? l.label : key;
   }
 
+  // Followed stocks that have actually fired, on the timeframe you are viewing.
+  function renderStarBanner(){
+    var names = Object.keys(starred);
+    if(!names.length){ $('starBanner').innerHTML = ''; return; }
+    var hot = poolRows.filter(function(r){
+      return isStar(r.symbol) && (r.state === 'triggered' || r.state === 'armed'); });
+    if(!hot.length){
+      $('starBanner').innerHTML = '<div class="starbanner">Following <b>'+names.length+
+        '</b> stock'+(names.length>1?'s':'')+'. None of them is set up on '+
+        esc(tfLabel(timeframe).toLowerCase())+' candles right now.</div>';
+      return;
+    }
+    var fired = hot.filter(function(r){ return r.state === 'triggered'; });
+    $('starBanner').innerHTML = '<div class="starbanner">On your watchlist: <b>'+
+      hot.map(function(r){ return esc(r.symbol) + (r.state==='triggered' ? ' (triggered)' : ''); }).join(', ')+
+      '</b>'+(fired.length ? ' \u2014 '+fired.length+' past the entry.' : ' \u2014 armed, waiting on the break.')+
+      '</div>';
+  }
+
+  // Copy the followed symbols in the shape watchlist.txt wants, so the daily
+  // e-mail can lead with them.
+  function copyWatchlist(btn){
+    var txt = Object.keys(starred).sort().join('\n');
+    var done = function(ok){
+      btn.textContent = ok ? 'Copied — paste into watchlist.txt' : 'Press Ctrl+C';
+      setTimeout(function(){ btn.textContent = 'Copy watchlist for e-mail'; }, 2600);
+    };
+    try{
+      navigator.clipboard.writeText(txt).then(function(){ done(true); }, function(){ fallback(); });
+    }catch(e){ fallback(); }
+    function fallback(){
+      var ta = document.createElement('textarea');
+      ta.value = txt; document.body.appendChild(ta); ta.select();
+      try{ document.execCommand('copy'); done(true); }catch(e2){ done(false); }
+      document.body.removeChild(ta);
+    }
+  }
+
+  // What five years of history says about each pattern. Breakeven at a 2R
+  // target is 33.3%, so that line is drawn explicitly -- a pattern below it
+  // lost money over the sample however good it looks on a chart.
+  function renderBacktest(){
+    var bt = data && data.backtest;
+    if(!bt || !bt.rows || !bt.rows.length){ $('btZone').innerHTML = ''; return; }
+    var breakeven = 100 / (1 + (bt.targetR || 2));
+    var rows = bt.rows.filter(function(r){ return r.timeframe === timeframe; });
+    if(!rows.length) rows = bt.rows;
+    var body = rows.map(function(r){
+      var decided = r.win + r.loss;
+      var edge = (r.hitRate != null) ? (r.hitRate - breakeven) : null;
+      return '<tr class="'+((r.hitRate != null && r.hitRate < breakeven) ? 'below' : '')+'">'+
+        '<td>'+esc(setupLabel(r.pattern))+'</td>'+
+        '<td>'+esc(tfLabel(r.timeframe))+'</td>'+
+        '<td class="n">'+(r.hitRate != null ? r.hitRate.toFixed(1)+'%' : '—')+'</td>'+
+        '<td class="edge'+(edge != null && edge > 0 ? ' pos' : '')+'">'+
+          (edge != null ? (edge > 0 ? '+' : '')+edge.toFixed(1)+' pts' : '—')+'</td>'+
+        '<td class="n">'+decided+'</td></tr>';
+    }).join('');
+    $('btZone').innerHTML =
+      '<div class="btwrap"><h3>How often each pattern worked</h3>'+
+      '<p class="bt-note">Every occurrence across '+bt.sample+' stocks over five years: '+
+      'once the entry triggered, did price reach '+(bt.targetR||2)+'R before the stop? '+
+      'At a '+(bt.targetR||2)+'R target you break even at <b>'+breakeven.toFixed(1)+'%</b> \u2014 '+
+      'the fourth column is the distance from that line. Anything below it lost money over the sample.</p>'+
+      '<div class="bt-scroll"><table class="bt"><thead><tr><th>Pattern</th><th>Candles</th><th>Reached '+
+      (bt.targetR||2)+'R</th><th>vs breakeven</th><th>Trades</th></tr></thead><tbody>'+
+      body+'</tbody></table></div>'+
+      (Object.keys(starred).length
+        ? '<p style="margin-top:12px"><button class="chip" id="copyWatch">Copy watchlist for e-mail</button></p>'
+        : '')+
+      '</div>';
+  }
+
   function validateSelections(){
     if(!data) return;
     // A remembered candle size the current file does not carry -- you removed
@@ -1044,6 +1224,7 @@ footer b{color:var(--muted); font-weight:600}
 
   function render(){
     $('rptVal').textContent = '₹'+INR0.format(cfg.totalRisk/50);
+    if(document.activeElement !== $('minRR')) $('minRR').value = minRR();
     if(!data){ return; }
     if(data.demo){
       $('demoZone').innerHTML = '<div class="demobar"><span class="tag">Preview</span><p><b>These are not real market numbers.</b> '+
@@ -1058,6 +1239,8 @@ footer b{color:var(--muted); font-weight:600}
     var pool = poolRows.length;
     $('selCount').textContent = list.length + ' of ' + pool + ' pass';
     cards(list);
+    renderStarBanner();
+    renderBacktest();
     var tfMeta = tfList().filter(function(t){ return t.key === timeframe; })[0] || {};
     $('asOf').textContent = tfMeta.lastBar || data.asOf || '—';
     $('closeLabel').textContent = (timeframe === 'daily') ? 'Close' : (tfLabel(timeframe) + ' close');
@@ -1097,8 +1280,11 @@ footer b{color:var(--muted); font-weight:600}
     var keep = (ae && ae.classList && ae.classList.contains('cell-in')) ? ae.getAttribute('data-sym') : null;
     tb.innerHTML = list.map(function(r){
       var chg = r.changePct;
-      var tr = '<tr class="row '+(r.state==='triggered'?'fire':'')+(openRow===r.symbol?' open':'')+'">'+
-        '<td class="l"><div class="symcell"><span class="tick">'+esc(r.symbol)+'</span><span class="co">'+esc(r.name)+'</span></div></td>'+
+      var tr = '<tr class="row '+(r.state==='triggered'?'fire':'')+(r.poorRR?' poorrr':'')+(openRow===r.symbol?' open':'')+'">'+
+        '<td class="l"><div class="symcell"><span class="tick">'+
+          '<button class="star'+(isStar(r.symbol)?' on':'')+'" data-star="'+esc(r.symbol)+
+          '" title="follow this stock" aria-pressed="'+isStar(r.symbol)+'">'+(isStar(r.symbol)?'★':'☆')+'</button>'+
+          esc(r.symbol)+warnBadges(r.warningTypes)+'</span><span class="co">'+esc(r.name)+'</span></div></td>'+
         '<td class="num">'+(r.price!=null?INR.format(r.price):'—')+'</td>'+
         '<td><span class="rsi"><span class="v">'+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+meter(r.rsi)+'</span></td>'+
         '<td>'+setupBadges(r.setupTypes, r.agree)+'</td>'+
@@ -1108,7 +1294,8 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="num '+(r.dist!=null&&r.dist<=0?'up':'')+'">'+(r.dist!=null?(r.dist<=0?'broken':r.dist.toFixed(1)+'%'):'—')+
           (r.resTouches?'<span class="touch" title="price respected this level '+r.resTouches+' times">×'+r.resTouches+'</span>':'')+'</td>'+
         '<td class="num">'+(r.stop!=null?INR.format(r.stop):'—')+'</td>'+
-        '<td class="num">'+(r.targets&&r.targets.length?INR.format(r.targets[0]):'—')+'</td>'+
+        '<td class="num">'+(r.target!=null?INR.format(r.target):(r.targets&&r.targets.length?INR.format(r.targets[0]):'—'))+'</td>'+
+        '<td class="num">'+rrCell(r)+'</td>'+
         '<td class="num">'+(r.tooSmall?'<span class="toosmall" title="one share risks more than your risk per trade">too big</span>'
             :(r.qty!=null?INR0.format(r.qty)+(r.capped?'<span class="touch">cap</span>':''):'—'))+'</td>'+
         '<td>'+pill(r)+'</td>'+
@@ -1130,6 +1317,7 @@ footer b{color:var(--muted); font-weight:600}
     } else if(t.id==='totalRisk'){ cfg.totalRisk = Math.max(0, numv(t.value)||0); save(); render(); }
     else if(t.id==='atrMult'){ cfg.atrMult = Math.max(0.1, numv(t.value)||1.5); save(); render(); }
     else if(t.id==='maxDeploy'){ cfg.maxDeploy = numv(t.value)||0; save(); render(); }
+    else if(t.id==='minRR'){ cfg.minRR = Math.max(1, numv(t.value)||2); save(); render(); }
     else if(t.id==='sort'){ sortBy = t.value; render(); }
     else if(t.id==='sectorSel'){ sector = t.value; shownCount = pageSize; save(); render(); }
     else if(t.id==='uniSel'){ uni = t.value; shownCount = pageSize; save(); render(); }
@@ -1157,6 +1345,12 @@ footer b{color:var(--muted); font-weight:600}
     if(!b) return;
     if(b.hasAttribute('data-open')){ var s=b.getAttribute('data-open'); openRow = (openRow===s)?null:s; render(); }
     else if(b.hasAttribute('data-reset')){ var s2=b.getAttribute('data-reset'); if(over[s2]) delete over[s2].resistance; save(); render(); }
+    else if(b.hasAttribute('data-star')){
+      var sym = b.getAttribute('data-star');
+      if(starred[sym]) delete starred[sym]; else starred[sym] = 1;
+      save(); render();
+    }
+    else if(b.id === 'copyWatch'){ copyWatchlist(b); }
     else if(b.hasAttribute('data-tf')){
       timeframe = b.getAttribute('data-tf'); shownCount = pageSize; save(); render();
     }
