@@ -22,6 +22,7 @@ Nothing here needs an API key.
 """
 
 import json
+import math
 import os
 import sys
 import time
@@ -192,7 +193,7 @@ BASE_TF      = "daily"  # the timeframe the row sort and the 52-week range use
 HISTORY      = "5y"     # history pulled per stock. Daily analysis only ever
                         # looks at the tail of this, but weekly needs the depth:
                         # 250 weekly bars of levels IS five years of chart.
-CHUNK        = 25       # stocks per yfinance request. Bigger means fewer
+CHUNK        = 40       # stocks per yfinance request. Bigger means fewer
                         # round-trips over ~750 stocks; too big and one refused
                         # request loses a lot of names at once, so 25 is the
                         # compromise. Failed chunks are retried per stock below.
@@ -1129,11 +1130,16 @@ def sector_returns(series: dict, upto=None) -> dict:
         if n < SECTOR_SKIP + 40:
             continue
         end = float(s2.iloc[-1 - SECTOR_SKIP])          # skip the last month
+        if not np.isfinite(end):
+            continue
         def ret(span):
             if n < span + SECTOR_SKIP + 1:
                 return None
             start = float(s2.iloc[-1 - SECTOR_SKIP - span])
-            return round((end / start - 1) * 100, 2) if start > 0 else None
+            if not np.isfinite(start) or start <= 0:
+                return None
+            v = (end / start - 1) * 100
+            return round(v, 2) if np.isfinite(v) else None
         r12, r6 = ret(SECTOR_LONG), ret(SECTOR_SHORT)
         if r12 is None and r6 is None:
             continue
@@ -1585,6 +1591,16 @@ def fetch_frames(symbols: list) -> tuple:
 
 
 def main() -> int:
+    # Phase timings, so a slow run can be diagnosed from the log instead of
+    # guessed at. Nearly all of it is normally the download.
+    clock = {}
+    t_start = time.time()
+    def phase(name, t0):
+        clock[name] = time.time() - t0
+        print(f"  [{clock[name]:6.1f}s] {name}", flush=True)
+        return time.time()
+
+    t = time.time()
     print(f"building watchlist from {len(UNIVERSES)} universes", flush=True)
     watchlist, sources = build_watchlist(UNIVERSES)
     if not watchlist:
@@ -1602,6 +1618,7 @@ def main() -> int:
     print(f"{len(watchlist)} unique stocks to fetch "
           f"(overlap between indexes is downloaded once)", flush=True)
 
+    t = phase("constituent lists", t)
     bench = fetch_benchmark()
     # The index has to be measured on the same candle size as the stock, or
     # comparative strength compares five months against two years.
@@ -1614,6 +1631,7 @@ def main() -> int:
                        if (bench is not None and not bench.empty and rule) else None)
 
     frames, missing = fetch_frames([row["symbol"] for row in watchlist])
+    t = phase("price downloads", t)
     if not frames:
         print("No price data came back at all -- leaving data.json untouched.", file=sys.stderr)
         return 1
@@ -1642,6 +1660,8 @@ def main() -> int:
                 packed[i] = bar
         r["bars"] = packed
 
+    t = phase("indicator + pattern analysis", t)
+
     # --- sector strength ---------------------------------------------------
     print("measuring sector strength", flush=True)
     sec_series, sec_counts = sector_series(frames, meta)
@@ -1668,6 +1688,8 @@ def main() -> int:
         print(f"market regime: Nifty is {'ABOVE' if regime_now else 'BELOW'} its "
               f"{REGIME_MA}-day average", flush=True)
 
+    t = phase("sector strength + regime", t)
+
     backtest = None
     if BACKTEST:
         # Evenly spaced across the watchlist so the sample spans large, mid,
@@ -1692,6 +1714,8 @@ def main() -> int:
                   f"with {str(rec['with']['hitRate']):>5}% (n={rec['with']['n']:>5})  "
                   f"without {str(rec['without']['hitRate']):>5}% (n={rec['without']['n']:>5})  "
                   f"-> {lift}", flush=True)
+
+    t = phase("backtest", t)
 
     rank = {"triggered": 0, "armed": 1, "oversold": 2, "overbought": 3,
             "watching": 4, "nodata": 5}
@@ -1744,11 +1768,33 @@ def main() -> int:
         "missing": sorted(set(missing)),
         "rows": rows,
     }
+    # NaN and Infinity are legal in Python and ILLEGAL in JSON. One of them
+    # anywhere in this file and the browser's JSON.parse throws, the dashboard
+    # shows "no scan results yet", and a perfectly good scan looks like a
+    # failed one. Numpy types need coercing for the same reason.
+    def json_safe(o):
+        if isinstance(o, float):
+            return o if math.isfinite(o) else None
+        if isinstance(o, np.floating):
+            v = float(o)
+            return v if math.isfinite(v) else None
+        if isinstance(o, np.integer):
+            return int(o)
+        if isinstance(o, (np.bool_, bool)):
+            return bool(o)
+        if isinstance(o, dict):
+            return {k: json_safe(v) for k, v in o.items()}
+        if isinstance(o, (list, tuple)):
+            return [json_safe(v) for v in o]
+        return o
+
+    payload = json_safe(payload)
+
     # Compact separators, not indent=1. At ~750 stocks the pretty version is
     # about 1.2 MB and this one about 800 KB, for identical content -- and the
     # file is re-committed every trading day, so the saving compounds.
     with open("data.json", "w", encoding="utf-8") as fh:
-        json.dump(payload, fh, separators=(",", ":"))
+        json.dump(payload, fh, separators=(",", ":"), allow_nan=False)
 
     # Which index to name for a stock that sits in eight of them. The smallest
     # one it belongs to is the most informative: "Nifty 50" tells you more than
@@ -1898,6 +1944,10 @@ def main() -> int:
         # the same line as the last sentence and is never recognised.
         fh.write("\n".join(lines) + "\n")
 
+    phase("writing data.json + alerts", t)
+    print(f"\ntotal {time.time() - t_start:.0f}s  "
+          f"({', '.join(f'{k} {v:.0f}s' for k, v in sorted(clock.items(), key=lambda x: -x[1])[:3])})",
+          flush=True)
     print(f"scanned {len(rows)} stocks | missing {len(set(missing))}")
     for tf in TIMEFRAMES:
         t = sum(1 for r in rows if r.get("tf", {}).get(tf, {}).get("status") == "triggered")
