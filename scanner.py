@@ -102,8 +102,11 @@ SUPPORT_BUFFER_ATR = 0.25   # the stop sits this far BELOW the support level
 # Bullish ones are entries. "doubletop" and "hs" are TOPPING patterns: they are
 # carried as warnings on the row and never given an entry, stop or quantity.
 SETUPS       = ["divergence", "engulfing", "tweezer",
-                "doublebottom", "invhs"]
-WARNINGS     = ["doubletop", "hs"]
+                "doublebottom", "invhs",
+                # continuation and base patterns
+                "flag", "pennant", "rectangle", "asctriangle", "symtriangle",
+                "rounding", "cuphandle"]
+WARNINGS     = ["doubletop", "hs", "desctriangle"]
 
 # double bottom / double top
 DBL_WINDOW   = 180      # bars searched for the pattern
@@ -124,6 +127,62 @@ HS_MAX_GAP   = 60
 HS_HEAD_ATR  = 1.0      # how far the head must stand clear of the shoulders
 HS_SHOULDER_ATR = 2.0   # how unequal the two shoulders may be
 HS_MAX_AGE   = 40       # right shoulder must be this recent
+
+# --- continuation and base patterns -----------------------------------------
+# All of these are CONSOLIDATIONS: a move, a pause, and a level that ends the
+# pause. Every one of them needs a freshness limit for the same reason the
+# double bottom does -- a pause from eight months ago is not a trade today.
+CONT_MAX_AGE   = 6      # the consolidation's last bar must be this recent.
+                        # These re-qualify every day while they hold, so an
+                        # age above zero means the pause has already broken
+                        # one way or the other -- a short window is honest.
+CONT_LATE_FRAC = 0.5    # price already this far through the measured move
+                        # means the move happened without you
+CONT_DEDUPE    = 5      # bars between two signals of the same kind
+# Patterns whose right-hand edge is a pivot, and which therefore cannot be
+# fresher than the pivot confirmation lag.
+PIVOT_PATTERNS = ("rectangle", "asctriangle", "symtriangle", "desctriangle")
+ROUND_DEDUPE   = 20     # cups are long, so their clusters are wider
+
+# flag and pennant
+FLAG_LENS    = (5, 8, 12, 18, 25)   # candidate lengths of the pause
+FLAG_POLES   = (5, 10, 16, 24)      # candidate lengths of the run into it
+FLAG_POLE_ATR = 3.5     # how far the pole must travel, in ATR
+FLAG_POLE_EFF = 0.70    # and how much of that range was spent going ONE way.
+                        # Without this a random walk qualifies: over 24 bars
+                        # its own range is already 4-5 ATR wide.
+FLAG_MAX_ATR = 3.5      # the pause itself must be tight, in ATR
+FLAG_MAX_WIDTH = 0.6    # the pause must be smaller than the run
+FLAG_MAX_RETRACE = 0.62 # a flag that gives back most of the pole is a reversal
+PENNANT_NARROW = 0.70   # a pennant's far end is this much tighter than its near
+
+# rectangle and triangles
+TRI_SPANS    = (20, 35, 55, 80, 120)  # widths searched, tightest first
+TRI_MIN_BARS = 15
+TRI_FLAT_ATR = 0.8      # how equal a "flat" edge's pivots must be, in ATR
+TRI_SLOPE_ATR = 0.5     # how much a sloping edge must actually slope, in ATR
+TRI_CONVERGE = 0.70     # a symmetrical triangle's far end, against its near end
+TRI_BREACH   = 0.35     # how far price may poke through a "flat" edge, in ATR.
+                        # This is what separates an edge price respected from
+                        # two pivots that happened to land on the same number.
+TRI_MONO     = 0.35     # slack allowed when checking a sloping edge really
+                        # slopes the whole way rather than stepping once
+RECT_MIN_BARS = 15
+RECT_MAX_HEIGHT_ATR = 6.0   # your note: "very narrow support & resistance"
+
+# rounding bottom and cup with handle
+ROUND_SPANS  = (60, 110, 180)   # a base is a long, slow thing
+ROUND_MIN_BARS = 40
+ROUND_STRIDE = 10       # bars between candidate right-hand edges
+ROUND_MIN_DEPTH_ATR = 3.0
+ROUND_FIT    = 0.55     # R^2 of the parabola fitted through the closes
+ROUND_EDGE   = 0.15     # fraction of the base treated as its right-hand climb
+ROUND_RECOVER = 0.45    # how far back up the right side must have come
+ROUND_RIM_TOL = 0.50    # the two rims must be within this much of the cup's
+                        # depth of each other -- a cup, not a ski slope
+HANDLE_MIN_BARS = 3
+HANDLE_MAX_BARS = 25
+HANDLE_MAX_DEPTH = 0.45 # a handle may retrace at most this much of the cup
 
 # volume confirmation
 VOL_LOOKBACK = 20       # bars averaged for "normal" volume
@@ -613,6 +672,530 @@ def find_head_shoulders(df: pd.DataFrame, atr: float) -> list:
     }]
 
 
+# ============================================================================
+# CONTINUATION AND BASE PATTERNS
+#
+# Flags, pennants, rectangles, triangles, rounding bottoms and cup-and-handle.
+# Everything above this point is a REVERSAL pattern -- something that says the
+# fall is over. These are the other half of the market: a stock already moving,
+# pausing, and then carrying on.
+#
+# One implementation, two callers. `scan_structures()` finds every occurrence
+# across the whole series; the live scan keeps the ones whose last bar is
+# recent, and the backtest keeps all of them. When a detector and its backtest
+# are separate pieces of code they drift apart, and you end up trading a
+# pattern that was never the thing the backtest measured.
+# ============================================================================
+def _fit_slope(xs, ys):
+    """Least-squares slope of ys against xs. None when it cannot be fitted."""
+    if len(xs) < 2:
+        return None
+    x = np.asarray(xs, dtype=float)
+    y = np.asarray(ys, dtype=float)
+    if not (np.isfinite(x).all() and np.isfinite(y).all()):
+        return None
+    xm, ym = x.mean(), y.mean()
+    den = float(((x - xm) ** 2).sum())
+    if den <= 0:
+        return None
+    return float(((x - xm) * (y - ym)).sum() / den)
+
+
+def _unit_array(close: np.ndarray, atr: np.ndarray) -> np.ndarray:
+    """ATR per bar, with a 1%-of-price fallback wherever ATR is not yet valid."""
+    fallback = close * 0.01
+    return np.where(np.isfinite(atr) & (atr > 0), atr, fallback)
+
+
+def _space_out(hits: list, gap: int) -> list:
+    """Thin a run of near-identical signals down to one.
+
+    A 20-bar flag is still a 20-bar flag one bar later, so a naive detector
+    reports the same setup twenty times and the backtest counts it twenty
+    times. Keep the first of each cluster, per pattern type.
+    """
+    kept, last = [], {}
+    for h in sorted(hits, key=lambda x: x["i"]):
+        prev = last.get(h["type"])
+        if prev is not None and h["i"] - prev < gap:
+            continue
+        last[h["type"]] = h["i"]
+        kept.append(h)
+    return kept
+
+
+# --- flags and pennants -----------------------------------------------------
+def scan_flags(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
+    """A sharp run (the pole), then a tight pause that leans against it.
+
+    Vectorised across window lengths instead of looped bar by bar: five flag
+    lengths by four pole lengths is twenty numpy passes over the series, where
+    the obvious nested loop would be a million Python comparisons per stock.
+
+    Your rule, kept exactly: entry on the break of the flag, stop at the low of
+    the flag. The measured move (pole height projected off the breakout) is
+    offered as the target, and `attach_reward` caps it at the first real
+    resistance above -- because a wall in the way beats a formula.
+    """
+    n = len(df)
+    if n < 40:
+        return []
+    high, low, close = df["High"], df["Low"], df["Close"]
+    cv = close.to_numpy(float)
+    unit = _unit_array(cv, atr)
+    found = []
+
+    for L in FLAG_LENS:
+        if L + max(FLAG_POLES) + 2 >= n:
+            continue
+        # The window ENDS on bar i and includes it. That matters: with the flag
+        # measured only up to yesterday, a bar that breaks the flag low today
+        # still gets reported as an intact flag with a stop above the price.
+        fh = high.rolling(L).max().to_numpy(float)              # flag high
+        fl = low.rolling(L).min().to_numpy(float)               # flag low
+        half = max(2, L // 2)
+        first_h = high.shift(L - half).rolling(half).max().to_numpy(float)
+        first_l = low.shift(L - half).rolling(half).min().to_numpy(float)
+        last_h = high.rolling(half).max().to_numpy(float)
+        last_l = low.rolling(half).min().to_numpy(float)
+
+        for P in FLAG_POLES:
+            pt = high.shift(L).rolling(P).max().to_numpy(float)       # pole top
+            pb = low.shift(L).rolling(P).min().to_numpy(float)        # pole base
+            pole_h = pt - pb
+            flag_h = fh - fl
+
+            # The pole has to be a RUN, not just a wide patch. Over 24 bars a
+            # random walk's high-to-low range is already four or five ATR, so
+            # "range >= 3 ATR" is a test almost anything passes. What separates
+            # a real pole is that the range was spent going one way: net
+            # close-to-close gain, and most of the range accounted for by it.
+            net = (close.shift(L) - close.shift(L + P - 1)).to_numpy(float)
+
+            ok = (np.isfinite(fh) & np.isfinite(fl) & np.isfinite(net) &
+                  np.isfinite(pt) & np.isfinite(pb) & np.isfinite(pole_h))
+            ok &= pole_h >= unit * FLAG_POLE_ATR   # the run has to be a real run
+            ok &= net >= unit * FLAG_POLE_ATR      # and it has to be UPWARD
+            ok &= net >= pole_h * FLAG_POLE_EFF    # spent going one way
+            ok &= flag_h > 0
+            ok &= flag_h <= unit * FLAG_MAX_ATR    # the pause is genuinely tight
+            ok &= flag_h <= pole_h * FLAG_MAX_WIDTH   # the pause is the smaller thing
+            # A flag holds most of the pole. One that gives the whole move back
+            # is a reversal wearing a flag's clothes.
+            ok &= fl >= pb + pole_h * (1.0 - FLAG_MAX_RETRACE)
+            ok &= fh <= pt + unit * 0.5            # a pause, not already a new leg
+
+            narrowing = ((last_h - last_l) <= (first_h - first_l) * PENNANT_NARROW)
+            converging = narrowing & (last_h < first_h) & (last_l > first_l)
+            drifting = (last_h <= first_h + unit * 0.25)   # flat-to-down highs
+
+            if since:
+                ok[:since] = False
+            for i in np.flatnonzero(ok):
+                if converging[i]:
+                    kind, label = "pennant", "Pennant"
+                elif drifting[i]:
+                    kind, label = "flag", "Bullish flag"
+                else:
+                    continue
+                found.append({
+                    "type": kind, "label": label, "i": int(i),
+                    "entry": round(float(fh[i]), 2),
+                    "stop": round(float(fl[i]), 2),
+                    "measured": round(float(fh[i] + pole_h[i]), 2),
+                    "quality": float(pole_h[i] / unit[i]),
+                    "detail": (f"Pole {round(float(pb[i]), 2)} → "
+                               f"{round(float(pt[i]), 2)} over {P} bars, then a "
+                               f"{L}-bar {'pennant' if kind == 'pennant' else 'flag'} "
+                               f"between {round(float(fl[i]), 2)} and "
+                               f"{round(float(fh[i]), 2)}."),
+                })
+
+    # Several (flag length, pole length) pairs describe the same pause, and a
+    # pause that converges is a pennant whichever window spotted it. One
+    # verdict per bar: pennant beats flag, then the biggest pole wins.
+    best = {}
+    for f in found:
+        key = f["i"]
+        cur = best.get(key)
+        if cur is None:
+            best[key] = f
+            continue
+        better = ((f["type"] == "pennant") > (cur["type"] == "pennant") or
+                  (f["type"] == cur["type"] and f["quality"] > cur["quality"]))
+        if better:
+            best[key] = f
+    return sorted(best.values(), key=lambda f: f["i"])
+
+
+# --- rectangles and triangles ----------------------------------------------
+def _edge(pivots: list, values: np.ndarray, lo: int, hi: int) -> list:
+    """The pivots of one kind that fall inside [lo, hi], with their values."""
+    return [(p, float(values[p])) for p in pivots if lo <= p <= hi]
+
+
+def scan_boxes(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
+    """Rectangles and the three triangles, all from the same pivot walk.
+
+    Every one of these is two edges -- one drawn through the highs, one through
+    the lows -- and the pattern's name is just which edges are flat and which
+    slope:
+
+        rectangle    flat highs      flat lows
+        ascending    flat highs      rising lows
+        descending   falling highs   flat lows      <- bearish, a warning only
+        symmetrical  falling highs   rising lows
+
+    Your notes had the symmetrical triangle as "equal bottoms & lower highs",
+    but the drawing underneath it shows a rising lower line. The drawing is the
+    standard pattern and it is what is coded here; "equal bottoms and lower
+    highs" is the descending triangle, which is the bearish one.
+    """
+    n = len(df)
+    if n < TRI_MIN_BARS + SWING_BARS * 2:
+        return []
+    high, low = df["High"], df["Low"]
+    hv, lv = high.to_numpy(float), low.to_numpy(float)
+    cv = df["Close"].to_numpy(float)
+    unit = _unit_array(cv, atr)
+    plows, phighs = pivot_lows(low), pivot_highs(high)
+    if len(plows) < 2 or len(phighs) < 2:
+        return []
+
+    found = []
+    # The right edge of a pattern is always a pivot: that is what makes this
+    # affordable. A hundred pivots per stock, not twelve hundred bars.
+    edges = [e for e in sorted(set(plows + phighs)) if e >= since]
+    for r in edges:
+        u = unit[r]
+        if not (np.isfinite(u) and u > 0):
+            continue
+        for span in TRI_SPANS:
+            lo = r - span
+            if lo < 0:
+                continue
+            hs = _edge(phighs, hv, lo, r)
+            ls = _edge(plows, lv, lo, r)
+            if len(hs) < 2 or len(ls) < 2:
+                continue
+
+            top_vals = [v for _, v in hs]
+            bot_vals = [v for _, v in ls]
+            band = max(top_vals) - min(bot_vals)
+            if band <= 0:
+                continue
+
+            flat_tol = u * TRI_FLAT_ATR
+            slope_min = u * TRI_SLOPE_ATR
+            top_flat = (max(top_vals) - min(top_vals)) <= flat_tol
+            bot_flat = (max(bot_vals) - min(bot_vals)) <= flat_tol
+            top_drop = top_vals[0] - top_vals[-1]      # falling highs when > 0
+            bot_rise = bot_vals[-1] - bot_vals[0]      # rising lows when > 0
+            top_falls = top_drop >= slope_min
+            bot_rises = bot_rise >= slope_min
+
+            roof = float(np.mean(top_vals)) if top_flat else max(top_vals)
+            floor_ = float(np.mean(bot_vals)) if bot_flat else min(bot_vals)
+            height = max(top_vals) - min(bot_vals)
+            last_bar = r
+
+            # Containment. Two pivots happening to sit at the same price inside
+            # a much wider range is a coincidence, not an edge. A flat edge is
+            # only flat if price actually respected it: nothing of consequence
+            # traded through it across the whole span.
+            span_hi = float(hv[lo:r + 1].max())
+            span_lo = float(lv[lo:r + 1].min())
+            roof_holds = span_hi <= roof + u * TRI_BREACH
+            floor_holds = span_lo >= floor_ - u * TRI_BREACH
+            # A sloping edge should slope the whole way, not jump once and sit.
+            tops_fall = all(top_vals[k] >= top_vals[k + 1] - u * TRI_MONO
+                            for k in range(len(top_vals) - 1))
+            bots_rise = all(bot_vals[k] <= bot_vals[k + 1] + u * TRI_MONO
+                            for k in range(len(bot_vals) - 1))
+
+            kind = None
+            if top_flat and bot_flat and roof_holds and floor_holds:
+                # A box is only a box if it is NARROW -- your note: "stuck in
+                # very narrow support & resistance compared to the sideways
+                # trend". A wide drifting range is just a range.
+                if band <= u * RECT_MAX_HEIGHT_ATR and span >= RECT_MIN_BARS:
+                    kind, label = "rectangle", "Rectangle"
+                    entry, stop = roof, floor_
+                    measured = roof + band
+                    detail = (f"Box between {round(floor_, 2)} and "
+                              f"{round(roof, 2)} for {span} bars "
+                              f"({len(hs)} touches on top, {len(ls)} below).")
+            elif top_flat and roof_holds and bot_rises and bots_rise:
+                kind, label = "asctriangle", "Ascending triangle"
+                entry = roof
+                stop = min(bot_vals[-1], bot_vals[-2]) - u * 0.25
+                # Your rule: "target equal to the points formed b/w the 2
+                # peaks" -- the drop from the flat top to the deepest low
+                # inside the pattern, projected off the breakout.
+                measured = roof + height
+                detail = (f"Flat top at {round(roof, 2)} with "
+                          f"{len(hs)} touches, lows rising "
+                          f"{round(bot_vals[0], 2)} → {round(bot_vals[-1], 2)}.")
+            elif bot_flat and floor_holds and top_falls and tops_fall:
+                kind, label = "desctriangle", "Descending triangle"
+                entry = stop = measured = None      # bearish: a warning, never a buy
+                detail = (f"Flat floor at {round(floor_, 2)} with "
+                          f"{len(ls)} touches, highs falling "
+                          f"{round(top_vals[0], 2)} → {round(top_vals[-1], 2)}.")
+            elif top_falls and bot_rises and tops_fall and bots_rise:
+                near = top_vals[0] - bot_vals[0]
+                far = top_vals[-1] - bot_vals[-1]
+                if near <= 0 or far > near * TRI_CONVERGE:
+                    continue                        # not actually converging
+                kind, label = "symtriangle", "Symmetrical triangle"
+                entry = max(top_vals)
+                stop = min(bot_vals[-1], bot_vals[-2]) - u * 0.25
+                measured = entry + near             # the widest part of the wedge
+                detail = (f"Highs {round(top_vals[0], 2)} → "
+                          f"{round(top_vals[-1], 2)}, lows "
+                          f"{round(bot_vals[0], 2)} → {round(bot_vals[-1], 2)}, "
+                          f"narrowing {round(near, 2)} → {round(far, 2)}.")
+            if kind is None:
+                continue
+
+            rec = {"type": kind, "label": label, "i": int(last_bar),
+                   "detail": detail, "quality": float(span)}
+            if entry is not None:
+                rec["entry"] = round(float(entry), 2)
+                rec["stop"] = round(float(stop), 2)
+                rec["measured"] = round(float(measured), 2)
+            found.append(rec)
+            break        # the tightest span that fits wins; stop widening
+
+    best = {}
+    for f in found:
+        key = (f["type"], f["i"])
+        if key not in best:
+            best[key] = f
+    return sorted(best.values(), key=lambda f: f["i"])
+
+
+# --- rounding bottom and cup with handle ------------------------------------
+def scan_cups(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
+    """A long curved base, and the same base with a handle on it.
+
+    The curve is tested by fitting a parabola to the closes: a real rounding
+    bottom has an upward-opening one (it falls, flattens, turns up) whose
+    lowest point sits somewhere near the middle. A V-shaped crash and a
+    straight drift both fail that test, which is the whole point.
+
+    Your rule for the plain rounding bottom -- buy at breakout, wide stop
+    because the pattern is long, exit at the resistance above -- is kept. The
+    handle version enters earlier, on the break of the handle, which is what
+    makes the stop small enough to be worth taking.
+    """
+    n = len(df)
+    if n < ROUND_MIN_BARS + 10:
+        return []
+    high, low, close = df["High"], df["Low"], df["Close"]
+    hv, lv, cv = (high.to_numpy(float), low.to_numpy(float), close.to_numpy(float))
+    unit = _unit_array(cv, atr)
+    found = []
+
+    # Striding keeps this affordable, but the LAST bar must always be a
+    # candidate: without it whether today's cup is seen at all depends on
+    # whether the history happens to divide by the stride.
+    ends = [e for e in range(ROUND_MIN_BARS, n, ROUND_STRIDE) if e >= since]
+    if n - 1 >= since and (not ends or ends[-1] != n - 1):
+        ends.append(n - 1)
+    for end in ends:
+        for span in ROUND_SPANS:
+            start = end - span
+            if start < 0:
+                continue
+            seg = cv[start:end + 1]
+            if len(seg) < ROUND_MIN_BARS or not np.isfinite(seg).all():
+                continue
+            u = unit[end]
+            if not (np.isfinite(u) and u > 0):
+                continue
+
+            x = np.arange(len(seg), dtype=float)
+            try:
+                a, b, c0 = np.polyfit(x, seg, 2)
+            except Exception:       # noqa: BLE001  degenerate segment
+                continue
+            if a <= 0:
+                continue            # opens downward: that is a dome, not a cup
+            fit = a * x * x + b * x + c0
+            ss_res = float(((seg - fit) ** 2).sum())
+            ss_tot = float(((seg - seg.mean()) ** 2).sum())
+            if ss_tot <= 0:
+                continue
+            r2 = 1.0 - ss_res / ss_tot
+            if r2 < ROUND_FIT:
+                continue            # the curve does not describe the prices
+            vertex = -b / (2 * a)
+            if not (len(seg) * 0.25 <= vertex <= len(seg) * 0.75):
+                continue            # the low has to be in the middle, not at an end
+
+            rim = float(hv[start:end + 1].max())
+            cup_low = float(lv[start:end + 1].min())
+            depth = rim - cup_low
+            if depth < u * ROUND_MIN_DEPTH_ATR:
+                continue            # too shallow to be a base
+
+            # A cup has two rims at roughly the same height. Without this a
+            # plain decline that curls up at the end fits a parabola happily
+            # and gets reported as a base.
+            edge_n = max(3, int(span * ROUND_EDGE))
+            left_rim = float(hv[start:start + edge_n].max())
+            right_rim = float(hv[end - edge_n:end + 1].max())
+            if abs(left_rim - right_rim) > depth * ROUND_RIM_TOL:
+                continue
+
+            # The right side has to have actually come back up. A cup still on
+            # its way down is just a downtrend with a nice curve through it.
+            right = cv[end - max(3, span // 10):end + 1]
+            if float(right.mean()) < rim - depth * ROUND_RECOVER:
+                continue
+
+            edge = max(3, int(span * ROUND_EDGE))
+            right_low = float(lv[end - edge:end + 1].min())
+            found.append({
+                "type": "rounding", "label": "Rounding bottom", "i": int(end),
+                "entry": round(rim, 2),
+                # Your note: the stop "should be big as the pattern is often
+                # long term". Big, but anchored to the last real low on the
+                # right-hand climb rather than all the way down in the cup --
+                # a stop under the cup itself risks the entire pattern.
+                "stop": round(right_low - u * 0.25, 2),
+                "measured": round(rim + depth, 2),
+                "quality": float(r2),
+                "detail": (f"Curved base over {span} bars, low {round(cup_low, 2)}, "
+                           f"rim {round(rim, 2)} (curve fit {round(r2 * 100)}%)."),
+            })
+
+            # --- the handle ---------------------------------------------
+            # A shallow pullback after the price has come back to the rim.
+            # Take the LONGEST handle that still qualifies, not the first. A
+            # handle that has been forming for a fortnight should be reported
+            # with a fortnight's low as its stop, not with day four's.
+            handle = None
+            for hl in range(HANDLE_MIN_BARS, HANDLE_MAX_BARS + 1):
+                h_end = end + hl
+                if h_end >= n:
+                    break
+                h_high = float(hv[end + 1:h_end + 1].max())
+                h_low = float(lv[end + 1:h_end + 1].min())
+                if h_high > rim + u * 0.5:
+                    break           # it broke out instead of forming a handle
+                if rim - h_low > depth * HANDLE_MAX_DEPTH:
+                    break           # too deep: that is a second cup, not a handle
+                handle = (h_end, hl, h_high, h_low)
+            if handle:
+                h_end, hl, h_high, h_low = handle
+                found.append({
+                    "type": "cuphandle", "label": "Cup and handle",
+                    "i": int(h_end),
+                    "entry": round(max(h_high, rim * 0.999), 2),
+                    "stop": round(h_low - u * 0.25, 2),
+                    "measured": round(rim + depth, 2),
+                    "quality": float(r2),
+                    "detail": (f"Cup low {round(cup_low, 2)} to rim "
+                               f"{round(rim, 2)}, then a {hl}-bar handle down to "
+                               f"{round(h_low, 2)}."),
+                })
+            break                   # one cup per end bar
+    return sorted(found, key=lambda f: f["i"])
+
+
+def scan_structures(df: pd.DataFrame, atr: np.ndarray = None,
+                    thin: bool = True, since: int = 0) -> list:
+    """Every flag, pennant, box, triangle and cup in the series.
+
+    `thin` keeps the FIRST bar of each cluster, which is what the backtest
+    wants -- the day the setup appeared is the day you would have acted on it.
+    The live scan passes thin=False and takes the LAST instead, because today's
+    view of a pause that has been forming for a fortnight is the complete one.
+    """
+    if atr is None:
+        atr = wilder_atr(df).to_numpy(dtype=float)
+    out = []
+    for fn in (scan_flags, scan_boxes, scan_cups):
+        try:
+            out.extend(fn(df, atr, since))
+        except Exception as exc:    # noqa: BLE001
+            print(f"    {fn.__name__} failed: {exc}", flush=True)
+    if not thin:
+        return out
+    gap = {"rounding": ROUND_DEDUPE, "cuphandle": ROUND_DEDUPE}
+    thinned, last = [], {}
+    for h in sorted(out, key=lambda x: x["i"]):
+        prev = last.get(h["type"])
+        if prev is not None and h["i"] - prev < gap.get(h["type"], CONT_DEDUPE):
+            continue
+        last[h["type"]] = h["i"]
+        thinned.append(h)
+    return thinned
+
+
+def live_structures(df: pd.DataFrame, atr: np.ndarray = None) -> tuple:
+    """The ones that are still live today, split into entries and warnings.
+
+    "Live" means the consolidation's last bar is recent. Without that test a
+    flag from eight months ago is still reported as a trade -- the same
+    mistake that once had 58 of 60 stocks showing a setup.
+    """
+    n = len(df)
+    atr_arr = (atr if atr is not None else wilder_atr(df).to_numpy(dtype=float))
+    last_price = float(df["Close"].iloc[-1])
+    entries, warnings = [], []
+    # Newest first, one per pattern: a pause that is still forming is reported
+    # as it looks TODAY, not as it looked the first day it qualified.
+    # Only the tail of the series can hold a LIVE pattern, so only the tail is
+    # searched. Walking five years of history to answer a question about the
+    # last fortnight cost about fifty milliseconds a stock, and there are
+    # fifteen hundred stock-timeframes in a run.
+    since = max(0, n - 1 - (CONT_MAX_AGE + SWING_BARS + HANDLE_MAX_BARS + 2))
+    fresh, seen = [], set()
+    for s in sorted(scan_structures(df, atr_arr, thin=False, since=since),
+                    key=lambda x: -x["i"]):
+        if s["type"] in seen:
+            continue
+        seen.add(s["type"])
+        fresh.append(s)
+    for s in fresh:
+        age = n - 1 - s["i"]
+        # Boxes and triangles are anchored on a PIVOT, and a pivot is not
+        # confirmed until SWING_BARS bars have printed after it. Holding them
+        # to the same freshness as a flag would be holding them to a deadline
+        # that passed before they could exist.
+        limit = CONT_MAX_AGE + (SWING_BARS if s["type"] in PIVOT_PATTERNS else 0)
+        if age > limit:
+            continue
+        rec = {
+            "type": s["type"], "label": s["label"], "direction": "long",
+            "date": df.index[s["i"]].strftime("%Y-%m-%d"),
+            "ageBars": int(age), "detail": s["detail"],
+        }
+        if s["type"] in WARNINGS:
+            rec["direction"] = "warn"
+            warnings.append(rec)
+            continue
+        entry, measured = s.get("entry"), s.get("measured")
+        if not entry:
+            continue
+        # Price already below where the stop would go: the consolidation broke
+        # the wrong way. Offering it as a trade would mean offering one that
+        # has already been stopped out.
+        stop = s.get("stop")
+        if stop is not None and last_price <= stop:
+            continue
+        # Already most of the way to the measured move? The trade has gone.
+        if measured and measured > entry:
+            if last_price > entry + (measured - entry) * CONT_LATE_FRAC:
+                continue
+        rec.update({"entry": entry, "stop": s.get("stop"), "measured": measured})
+        entries.append(rec)
+    return entries, warnings
+
+
 def volume_state(df: pd.DataFrame, idx: int) -> dict:
     """Did anyone actually show up for this bar?
 
@@ -870,6 +1453,17 @@ def historical_signals(df: pd.DataFrame) -> list:
             else:
                 continue
             break
+
+    # --- continuation and base patterns -------------------------------------
+    # Exactly the detector the live scan uses, replayed across the history.
+    # Sharing it is the point: a backtest of a slightly different flag would
+    # be a number about a pattern you never trade.
+    for st in scan_structures(df, atr):
+        if st.get("entry") is None or st.get("stop") is None:
+            continue                       # bearish ones carry no trade
+        if st["entry"] <= st["stop"]:
+            continue
+        emit(st["type"], st["i"], float(st["entry"]), float(st["stop"]))
 
     # Risk:reward as it looked THEN. The nearest swing high already printed
     # above the entry is the wall price has to get through, which is the same
@@ -1313,6 +1907,13 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
     if "invhs" in SETUPS:
         raw.extend(find_inverse_hs(df, last_atr))
 
+    # Continuation and base patterns. These come back already carrying their
+    # own entry, stop and measured move, because for a consolidation those
+    # three numbers ARE the pattern -- the edge it broke, the edge it held,
+    # and the move that ran into it.
+    cont_entries, cont_warnings = live_structures(df, df["ATR"].to_numpy(float))
+    raw.extend([c for c in cont_entries if c["type"] in SETUPS])
+
     # Order matters. Ground the stop on real support FIRST, because every other
     # number -- quantity, deployment, amount at risk, risk:reward -- is derived
     # from the distance between entry and stop. Size it, then measure the reward
@@ -1334,6 +1935,7 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         warnings.extend(find_double_top(df, last_atr))
     if "hs" in WARNINGS:
         warnings.extend(find_head_shoulders(df, last_atr))
+    warnings.extend([c for c in cont_warnings if c["type"] in WARNINGS])
     for w in warnings:
         w["direction"] = "warn"
 
@@ -1852,7 +2454,9 @@ def main() -> int:
         lines.append("")
         if mine:
             for tf, r, v in mine:
-                rr = f", R:R {v['rr']}:1" if v.get("rr") else ""
+                # Risk first, always 1. The e-mail digest was still printing
+                # this the other way round while the page had been fixed.
+                rr = f", risk:reward 1:{v['rr']:.2f}" if v.get("rr") else ""
                 lines.append(
                     f"- **{v['symbol']}** {v['status']} on {TF_LABEL.get(tf, tf).lower()} "
                     f"at Rs {v['price']:,} -- entry {v.get('entry')}, "

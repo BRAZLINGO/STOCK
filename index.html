@@ -69,6 +69,8 @@ input{font:inherit; color:inherit}
 .tfpick{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted)}
 .tfpick .chip[aria-pressed="true"]{font-weight:600}
 .forming{font-size:12px; color:var(--brass); font-family:var(--mono)}
+#formingNote{margin:0}
+#formingNote:not(:empty){margin:-2px 0 10px}
 .agree{font-family:var(--mono); font-size:10px; color:var(--brass); margin-left:2px; vertical-align:super}
 .slash{color:var(--faint); margin:0 2px; font-size:11px}
 .rr{font-family:var(--mono); font-variant-numeric:tabular-nums}
@@ -93,7 +95,15 @@ input{font:inherit; color:inherit}
 .sectag.top{color:var(--sprout); border-color:var(--sprout-line)}
 .sectag.bot{color:var(--faint); opacity:.7}
 .secstrip{margin-top:14px; border:1px solid var(--line); border-radius:4px;
-  background:var(--surface); padding:12px 14px}
+  background:var(--surface); padding:10px 14px}
+.secstrip > summary{cursor:pointer; display:flex; align-items:center; gap:10px;
+  flex-wrap:wrap; list-style:none}
+.secstrip > summary::-webkit-details-marker{display:none}
+.secstrip > summary::after{content:'\25be'; color:var(--faint); font-family:var(--mono); margin-left:6px}
+.secstrip[open] > summary::after{content:'\25b4'}
+.secstrip[open] > summary{margin-bottom:9px; padding-bottom:8px; border-bottom:1px solid var(--line-soft)}
+.secstrip > summary .formula{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1}
+#sectorSel{font-family:var(--mono); max-width:320px}
 .secstrip .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:9px}
 .secbars{display:grid; gap:4px}
 .secbar{display:grid; grid-template-columns:minmax(120px,1.4fr) 1fr auto; gap:10px;
@@ -325,6 +335,12 @@ tbody tr.fire td:first-child{background:linear-gradient(var(--brass-soft),var(--
 .rstag{display:inline-flex; align-items:baseline; gap:5px; font-size:11px; font-family:var(--display); font-weight:600; letter-spacing:.05em; text-transform:uppercase}
 .rstag i{font-family:var(--mono); font-style:normal; font-size:11.5px; font-weight:400; letter-spacing:0}
 .rstag.over{color:var(--sprout)} .rstag.under{color:var(--faint)}
+/* Volume on the signal bar. Confirmed is deliberately the loud one: it is the
+   filter that earns the most in the backtest, so it should catch the eye. */
+.volx{font-family:var(--mono); font-size:12px}
+.volx.on{color:var(--sprout); font-weight:600}
+.volx.on::before{content:"\25B2"; font-size:8px; margin-right:3px; vertical-align:1px}
+.volx.off{color:var(--faint)}
 .divmark{font-family:var(--mono); font-size:13px}
 .divmark.yes{color:var(--sprout); font-weight:600}
 .divmark.no{color:var(--faint)}
@@ -427,7 +443,10 @@ footer b{color:var(--muted); font-weight:600}
   .tcard{padding:12px 13px}
   .controls{gap:8px}
   .search{flex:1 1 130px; min-width:0; padding:11px 10px; min-height:44px; font-size:15px}
-  select.sel{flex:1 1 150px; padding:11px 8px; min-height:44px; font-size:14px}
+  /* min-width:0 stops the longest option ("All sectors - strongest first")
+     from stretching the box past the edge of the card on a phone. */
+  select.sel{flex:1 1 150px; min-width:0; max-width:100%; padding:11px 8px;
+             min-height:44px; font-size:14px}
   .moreWrap .btn{min-height:46px; padding:12px 22px; width:100%}
   .chip{min-height:42px}
   .play summary{min-height:48px}
@@ -460,8 +479,7 @@ footer b{color:var(--muted); font-weight:600}
     <div>
       <h1 class="brand"><a href="#desk" class="tab" id="tabDesk">Midcap Reversal Desk</a><span
         class="slash2">/</span><a href="#dashboard" class="tab" id="tabDash">Dashboard</a></h1>
-      <p class="sub">Bullish RSI divergences across the index and candle size you choose, scanned nightly on real NSE data and sized by the risk-per-trade rule.</p>
-      <p id="formingNote"></p>
+      <p class="sub">Reversal and continuation setups across the index and candle size you choose, scanned nightly on real NSE data, backtested against five years, and sized by the risk-per-trade rule.</p>
     </div>
     <div class="stamp">
       <div class="cell"><span class="eyebrow" id="closeLabel">Close</span><span class="val" id="asOf">—</span></div>
@@ -500,6 +518,11 @@ footer b{color:var(--muted); font-weight:600}
         <select class="sel" id="sectorSel"><option value="">All sectors</option></select>
       </label>
     </div>
+    <!-- "still forming" lives here, BELOW the candle chips, not in the
+         masthead. In the masthead it appeared and vanished as you switched
+         candles, changing the height of everything above the chips and
+         nudging the page. Here the chip you pressed never moves. -->
+    <p id="formingNote"></p>
     <div class="uni-row selectrow">
       <span class="eyebrow">Setups</span>
       <div class="chips" id="setupChips"></div>
@@ -577,6 +600,7 @@ footer b{color:var(--muted); font-weight:600}
       <button class="chip" data-f="armed" aria-pressed="false">Armed</button>
       <button class="chip" data-f="oversold" aria-pressed="false">RSI &lt; 30</button>
       <button class="chip" data-f="near" aria-pressed="false">Near breakout</button>
+      <button class="chip" data-f="volume" aria-pressed="false" title="the signal bar traded at least 1.2x its own 20-bar average — your best-performing filter in the backtest">Volume confirmed</button>
       <button class="chip" data-f="goodrr" aria-pressed="false">Meets R:R</button>
       <button class="chip" data-f="starred" aria-pressed="false">★ My watchlist</button>
       <span class="andnote" id="andNote"></span>
@@ -587,6 +611,7 @@ footer b{color:var(--muted); font-weight:600}
     <select class="sel" id="sort">
       <option value="state">Sort: signal state</option>
       <option value="weight">Sort: turnover</option>
+      <option value="vol">Sort: volume on the signal</option>
       <option value="atrpct">Sort: ATR % high → low</option>
       <option value="rs">Sort: strongest vs Nifty</option>
       <option value="rsi">Sort: RSI low → high</option>
@@ -605,11 +630,12 @@ footer b{color:var(--muted); font-weight:600}
       <thead>
         <tr>
           <th class="l">Stock</th><th class="col-spark">Chart</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
+          <th title="volume on the signal bar against its own 20-bar average">Volume</th>
           <th>ATR %</th><th>vs Nifty</th><th>Resistance ₹</th><th>To break</th><th>Stop ₹</th>
           <th class="col-target">Target ₹</th><th class="col-target">Risk : Reward</th><th>Qty</th><th>State</th><th></th>
         </tr>
       </thead>
-      <tbody id="tbody"><tr><td colspan="13" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
+      <tbody id="tbody"><tr><td colspan="16" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
     </table>
   </div>
 
@@ -660,6 +686,7 @@ footer b{color:var(--muted); font-weight:600}
   var search='', sortBy='state', openRow=null;   // `filter` became `filters`
   var uni='all', sector='', sel={momentum:false, strength:false, liquid:false};
   var filters = [];       // ticked state filters, combined with AND
+  var secOpen = false;    // is the full sector breakdown expanded
   var showTarget = false; // Target + Risk:Reward columns, off until you ask
   function hasFilter(k){ return filters.indexOf(k) >= 0; }
   var bypassed = false;   // search / watchlist showing the whole universe
@@ -670,7 +697,7 @@ footer b{color:var(--muted); font-weight:600}
   function isStar(sym){ return !!starred[sym]; }
   var picked=[], agreeMode='all';
   var KEY='midcap-reversal-desk';
-  var COLS=15;
+  var COLS=16;
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -694,13 +721,22 @@ footer b{color:var(--muted); font-weight:600}
         if(typeof s.timeframe === 'string') timeframe = s.timeframe;
         starred = s.starred || {};
         if(Array.isArray(s.filters)) filters = s.filters;
-        if(typeof s.showTarget === 'boolean') showTarget = s.showTarget; }
+        if(typeof s.showTarget === 'boolean') showTarget = s.showTarget;
+        if(typeof s.sortBy === 'string'){
+          sortBy = s.sortBy;
+          // The <select> has to agree with the model, or a reload sorts by the
+          // remembered key while the box still reads "signal state".
+          var sortEl = $('sort');
+          if(sortEl && sortEl.querySelector('option[value="'+sortBy+'"]')) sortEl.value = sortBy;
+          else sortBy = 'state';
+        }
+        if(typeof s.secOpen === 'boolean') secOpen = s.secOpen; }
     }catch(e){ /* private mode or blocked storage: run with defaults */ }
   }
   function save(){
     try{ localStorage.setItem(KEY, JSON.stringify({cfg:cfg, over:over, sel:sel, picked:picked,
       uni:uni, sector:sector, timeframe:timeframe, starred:starred,
-      filters:filters, showTarget:showTarget})); }catch(e){}
+      filters:filters, showTarget:showTarget, sortBy:sortBy, secOpen:secOpen})); }catch(e){}
   }
 
   function rptNow(){ return cfg.totalRisk / 50; }
@@ -900,7 +936,10 @@ footer b{color:var(--muted); font-weight:600}
       armed:     function(r){ return r.state === 'armed' || r.state === 'triggered'; },
       oversold:  function(r){ return r.rsi != null && r.rsi < 30; },
       near:      function(r){ return r.dist != null && r.dist >= 0 && r.dist <= 5; },
-      goodrr:    function(r){ return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); }
+      goodrr:    function(r){ return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); },
+      // The backtest's best filter on both timeframes: +4.1 points daily,
+      // +5.3 weekly. Only about a fifth of signals pass it.
+      volume:    function(r){ return r.volumeConfirmed === true; }
     };
     filters.forEach(function(k){
       var t = TESTS[k];
@@ -909,6 +948,7 @@ footer b{color:var(--muted); font-weight:600}
     out.sort(function(a,b){
       if(sortBy==='sym') return a.symbol.localeCompare(b.symbol);
       if(sortBy==='weight') return (b.turnover||0)-(a.turnover||0);
+      if(sortBy==='vol'){ if(a.volumeRatio==null) return 1; if(b.volumeRatio==null) return -1; return b.volumeRatio-a.volumeRatio; }
       if(sortBy==='atrpct'){ if(a.atrPct==null) return 1; if(b.atrPct==null) return -1; return b.atrPct-a.atrPct; }
       if(sortBy==='rs'){ if(a.rsGap==null) return 1; if(b.rsGap==null) return -1; return b.rsGap-a.rsGap; }
       if(sortBy==='rsi'){ if(a.rsi==null) return 1; if(b.rsi==null) return -1; return a.rsi-b.rsi; }
@@ -932,6 +972,32 @@ footer b{color:var(--muted); font-weight:600}
     return '<span class="rstag '+(r.outperforming?'over':'under')+'" title="Ratio to Nifty 50 against its '+
       ((data.settings&&data.settings.crsPeriod)||100)+'-session average">'+
       (r.outperforming?'over':'under')+'<i>'+g+'</i></span>';
+  }
+  // Volume on the SIGNAL bar against its own 20-bar average. The scan already
+  // measured this for every setup; until now it was buried inside the expanded
+  // row, which meant the single best filter in the backtest was invisible
+  // while you scanned. 1.2x or better counts as confirmed.
+  function volCell(r){
+    if(r.volumeRatio == null && r.volumeConfirmed == null)
+      return '<span class="stale">—</span>';
+    var x = r.volumeRatio;
+    // Don't let the rounding contradict the verdict. 1.19x rounds to "1.2x",
+    // which would read as confirmed while the flag says thin -- so on that
+    // boundary, show the second decimal instead of arguing with yourself.
+    var txt;
+    if(x == null){ txt = r.volumeConfirmed ? 'yes' : 'thin'; }
+    else if(x > 0 && x < 0.1){ txt = '<0.1×'; }
+    else {
+      var one = x.toFixed(1);
+      txt = ((!r.volumeConfirmed && parseFloat(one) >= 1.2) ||
+             (r.volumeConfirmed && parseFloat(one) < 1.2))
+            ? x.toFixed(2) + '×' : one + '×';
+    }
+    return '<span class="volx '+(r.volumeConfirmed ? 'on' : 'off')+'" title="'+
+      (r.volumeConfirmed
+        ? 'confirmed: the signal bar traded '+txt+' its 20-bar average'
+        : 'thin: the signal bar traded '+txt+' its 20-bar average, below the 1.2× mark')+
+      '">'+txt+'</span>';
   }
   function meter(rsi){
     if(rsi==null) return '<span class="meter"><em></em><u></u></span>';
@@ -982,6 +1048,7 @@ footer b{color:var(--muted); font-weight:600}
           '<div><div class="k">Deploy</div><div class="v'+(r.overBudget?' thin':'')+'">'+
             (r.deploy!=null?money(r.deploy,0):'—')+'</div></div>'+
           '<div><div class="k">At risk</div><div class="v">'+(r.atRisk!=null?money(r.atRisk,0):'—')+'</div></div>'+
+          '<div><div class="k">Volume</div><div class="v">'+volCell(r)+'</div></div>'+
         '</div><div class="tspark">'+sparkline(r, 260, 42)+'</div>'+
         '<div class="why">'+why+(showTarget ? levelNote(r) : '')+
           (r.overBudget?' <b>That is over a quarter of your risk capital in one position.</b>':'')+
@@ -1084,9 +1151,18 @@ footer b{color:var(--muted); font-weight:600}
     tweezer:     {label:'Tweezer bottom', short:'TWZ'},
     doublebottom:{label:'Double bottom', short:'DB'},
     invhs:       {label:'Inverse head & shoulders', short:'IHS'},
+    // continuation and base patterns: a move, a pause, then the move again
+    flag:        {label:'Bullish flag', short:'FLG'},
+    pennant:     {label:'Pennant', short:'PEN'},
+    rectangle:   {label:'Rectangle', short:'RECT'},
+    asctriangle: {label:'Ascending triangle', short:'ASC'},
+    symtriangle: {label:'Symmetrical triangle', short:'SYM'},
+    rounding:    {label:'Rounding bottom', short:'RND'},
+    cuphandle:   {label:'Cup and handle', short:'C&H'},
     // topping patterns -- warnings, never entries
     doubletop:   {label:'Double top', short:'DT'},
-    hs:          {label:'Head & shoulders', short:'H&S'}
+    hs:          {label:'Head & shoulders', short:'H&S'},
+    desctriangle:{label:'Descending triangle', short:'DESC'}
   };
   // A pattern and its mirror image are one idea, so they share a chip.
   // Picking "Double top / bottom" finds both the W and the M -- one is an
@@ -1096,7 +1172,15 @@ footer b{color:var(--muted); font-weight:600}
     {key:'engulfing',    label:'Bullish engulfing',        short:'ENG',  members:['engulfing']},
     {key:'tweezer',      label:'Tweezer bottom',           short:'TWZ',  members:['tweezer']},
     {key:'double',       label:'Double top / bottom',      short:'DB/DT',members:['doublebottom','doubletop']},
-    {key:'headshoulders',label:'Head & shoulders / reverse',short:'H&S', members:['invhs','hs']}
+    {key:'headshoulders',label:'Head & shoulders / reverse',short:'H&S', members:['invhs','hs']},
+    {key:'flagfam',      label:'Flag / pennant',            short:'FLG', members:['flag','pennant']},
+    {key:'cupfam',       label:'Rounding bottom / cup & handle', short:'CUP',
+                                                            members:['rounding','cuphandle']},
+    // Short enough not to wrap to two lines on a phone; the chip's tooltip
+    // and the row badges spell all three out.
+    {key:'trifam',       label:'Triangle: asc / sym / desc', short:'TRI',
+                                                            members:['asctriangle','symtriangle','desctriangle']},
+    {key:'rectangle',    label:'Rectangle',                 short:'RECT',members:['rectangle']}
   ];
   function familyOf(key){
     for(var i=0;i<SETUP_FAMILIES.length;i++) if(SETUP_FAMILIES[i].key===key) return SETUP_FAMILIES[i];
@@ -1245,11 +1329,18 @@ footer b{color:var(--muted); font-weight:600}
   }
 
   // Topping patterns. Never an entry -- a flag that the chart is fighting you.
+  // Why each warning is a warning. A double top and a head & shoulders are
+  // tops; a descending triangle is a floor being tested until it gives way.
+  // Different failures, so they get different sentences.
+  var WARN_WHY = {
+    desctriangle: 'a flat floor with lower highs pressing on it \u2014 a breakdown, not a buy'
+  };
   function warnBadges(types){
     if(!types || !types.length) return '';
     return types.map(function(t){
+      var why = WARN_WHY[t] || 'a topping pattern, not a buy';
       return '<span class="warnbadge" title="'+esc(setupLabel(t))+
-        ' \u2014 a topping pattern, not a buy">'+esc(setupShort(t))+'</span>';
+        ' \u2014 '+esc(why)+'">'+esc(setupShort(t))+'</span>';
     }).join('');
   }
 
@@ -1392,10 +1483,35 @@ footer b{color:var(--muted); font-weight:600}
     modeEl.className = 'formula' + (agreeMode === 'any' ? ' warn' : '');
 
     var sectors = data.sectors || [];
+    // The strength reading lives IN the dropdown rather than in a 21-row strip
+    // above the page. Ordered strongest first, so opening it IS the ranking.
     var selEl = $('sectorSel');
-    if(sectors.length && selEl.options.length <= 1){
-      selEl.innerHTML = '<option value="">All sectors</option>' +
-        sectors.map(function(s){ return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('');
+    var strength = (data.sectorStrength || []);
+    var byName = {};
+    strength.forEach(function(x){ byName[x.name] = x; });
+    var sig = strength.length + ':' + (strength[0] ? strength[0].name + strength[0].r12 : '') +
+              ':' + sectors.length;
+    if(sectors.length && selEl.getAttribute('data-sig') !== sig){
+      selEl.setAttribute('data-sig', sig);
+      var ordered = sectors.slice().sort(function(a, b){
+        var ra = byName[a], rb = byName[b];
+        if(ra && rb) return ra.rank - rb.rank;
+        if(ra) return -1;
+        if(rb) return 1;
+        return a.localeCompare(b);
+      });
+      selEl.innerHTML = '<option value="">All sectors' +
+        (strength.length ? ' — strongest first' : '') + '</option>' +
+        ordered.map(function(nm){
+          var x = byName[nm];
+          var label = x
+            ? '#' + x.rank + '  ' + nm + '   ' +
+              (x.r12 != null ? (x.r12 > 0 ? '+' : '') + x.r12.toFixed(0) + '%' : '') +
+              (x.r6 != null ? '  (6m ' + (x.r6 > 0 ? '+' : '') + x.r6.toFixed(0) + '%)' : '')
+            : nm;
+          return '<option value="' + esc(nm) + '">' + esc(label) + '</option>';
+        }).join('');
+      selEl.value = sector || '';
     }
     selEl.parentNode.style.display = sectors.length ? '' : 'none';
     Array.prototype.forEach.call(document.querySelectorAll('#selChips .chip'), function(c){
@@ -1429,6 +1545,8 @@ footer b{color:var(--muted); font-weight:600}
           (isStar(r.symbol)?'★':'☆')+'</button>'+
         setupBadges(r.setupTypes, r.agree)+warnBadges(r.warningTypes)+
         '<span class="mc-chip">RSI '+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+
+        (r.volumeRatio!=null?'<span class="mc-chip '+(r.volumeConfirmed?'up':'')+'">Vol '+
+          r.volumeRatio.toFixed(1)+'×</span>':'')+
         (r.atrPct!=null?'<span class="mc-chip">ATR '+r.atrPct.toFixed(1)+'%</span>':'')+
         (r.outperforming!=null?'<span class="mc-chip '+(r.outperforming?'up':'')+'">'+
           (r.outperforming?'beats':'lags')+' Nifty</span>':'')+
@@ -1534,14 +1652,19 @@ footer b{color:var(--muted); font-weight:600}
     var w = (data.sectorWindows || {});
     var mx = Math.max.apply(null, secs.map(function(s){ return Math.abs(s.r12 || 0); })) || 1;
     var reg = data.regime || {};
-    $('secZone').innerHTML = '<div class="secstrip"><div class="hd">'+
-      '<span class="eyebrow">Sector strength</span>'+
-      '<span class="formula">12-month return, skipping the last month'+
-      (w.skip ? ' (' + w.skip + ' sessions)' : '')+'</span>'+
+    var top3 = secs.slice(0, 3).map(function(x){ return x.name; }).join(', ');
+    var bot3 = secs.slice(-3).map(function(x){ return x.name; }).join(', ');
+    $('secZone').innerHTML = '<details class="secstrip"'+(secOpen?' open':'')+'><summary>'+
+      '<span class="eyebrow">Sector strength</span> '+
+      '<span class="formula">strongest '+esc(top3)+' &nbsp;·&nbsp; weakest '+esc(bot3)+'</span>'+
       (reg.above != null
         ? '<span class="sectag'+(reg.above?' top':' bot')+'" style="margin-left:auto">Nifty '+
           (reg.above ? 'above' : 'below')+' its '+reg.ma+'-day average</span>'
         : '')+
+      '</summary><div class="hd">'+
+      '<span class="formula">12-month return, skipping the last month'+
+      (w.skip ? ' (' + w.skip + ' sessions)' : '')+'. Every sector also sits in the '+
+      '<b>Sector</b> dropdown below, ranked strongest first.</span>'+
       '</div><div class="secbars">'+
       secs.map(function(x){
         var pct = Math.abs(x.r12 || 0) / mx * 100;
@@ -1559,7 +1682,7 @@ footer b{color:var(--muted); font-weight:600}
       '<p class="bt-note" style="margin:10px 0 0">Money rotates between sectors over months, '+
       'which is why this is worth reading on a weekly trade and worthless on a daily one. '+
       'It breaks ties between similar setups \u2014 it does not make a weak pattern good. '+
-      'Whether it actually helps on your patterns is measured below.</p></div>';
+      'Whether it actually helps on your patterns is measured below.</p></details>';
   }
 
   function renderFilters(){
@@ -1646,20 +1769,64 @@ footer b{color:var(--muted); font-weight:600}
   // appears to leap to the middle or the bottom. Measure where the control you
   // touched sits, re-render, then shift the scroll by the same amount so that
   // control stays exactly where your eye already is.
-  function keepPut(el, fn){
+  // The same stock's star appears in three places at once -- the live-trigger
+  // cards, the desktop table and the phone cards -- so a bare
+  // [data-star="X"] selector finds the FIRST one in the document, which is
+  // usually a trigger card at the very top of the page rather than the row you
+  // actually clicked. Anchoring on that is what dragged the page upward.
+  // scopeSel() pins the selector to the panel the click came from.
+  var KEEP_SCOPES = ['#tbody', '#cardlist', '#trigZone', '#starBanner',
+                     '#setupChips', '#tfChips', '#filterZone', '#secZone'];
+  function scopeSel(el, sel){
+    for(var i = 0; i < KEEP_SCOPES.length; i++){
+      if(el.closest && el.closest(KEEP_SCOPES[i])){
+        // Fall back to the panel itself: unstarring from the "followed" banner
+        // deletes that very button, and with no anchor at all we would leave
+        // the scroll wherever the shorter document clamped it.
+        return [KEEP_SCOPES[i] + ' ' + sel, KEEP_SCOPES[i]];
+      }
+    }
+    return sel;
+  }
+
+  function keepPut(ref, fn){
+    // `ref` may be an element, a CSS selector, or a list of selectors tried in
+    // order. The selector form matters: starring a stock, switching candles and
+    // picking a setup all rebuild their container's HTML, so the button you
+    // clicked is DETACHED by the time we measure again. A detached element
+    // reports top = 0, the shift comes out as minus the original position, and
+    // the page yanks itself to the top -- exactly the jump this prevents.
+    var refs = (ref && ref.nodeType) ? [ref]
+             : (Object.prototype.toString.call(ref) === '[object Array]' ? ref : [ref]);
+    function find(){
+      for(var i = 0; i < refs.length; i++){
+        var r = refs[i];
+        if(r && r.nodeType){ if(r.isConnected) return r; continue; }
+        var hit = r ? document.querySelector(r) : null;
+        if(hit) return hit;
+      }
+      return null;
+    }
+    var el = find();
     if(!el || !el.getBoundingClientRect){ fn(); return; }
     var before = el.getBoundingClientRect().top;
+    var vh0 = window.innerHeight || document.documentElement.clientHeight;
+    var wasVisible = (before >= 0 && before <= vh0);
     fn();
-    var after = el.getBoundingClientRect().top;
+    var el2 = find();
+    if(!el2){ return; }          // gone after the render: better still than wrong
+    var after = el2.getBoundingClientRect().top;
     var shift = after - before;
     if(shift) window.scrollBy(0, shift);
+    el = el2;
     // Going from 750 rows to three can leave the document too short to hold
     // that position, and the browser clamps the scroll. If the control you
     // pressed ended up off-screen anyway, bring it back into view rather than
-    // leaving you somewhere arbitrary.
+    // leaving you somewhere arbitrary. Only when it was on screen to begin
+    // with: rescuing a control that was already out of sight is itself a jump.
     var r = el.getBoundingClientRect();
     var vh = window.innerHeight || document.documentElement.clientHeight;
-    if(r.bottom < 0 || r.top > vh) el.scrollIntoView({block:'center'});
+    if(wasVisible && (r.bottom < 0 || r.top > vh)) el.scrollIntoView({block:'center'});
   }
 
   function render(){
@@ -1726,7 +1893,7 @@ footer b{color:var(--muted); font-weight:600}
     $('moreWrap').hidden = true;
 
     var tb = $('tbody');
-    if(!list.length){ tb.innerHTML='<tr><td colspan="13" style="padding:22px;text-align:left;color:var(--muted)">Nothing matches that filter.</td></tr>'; return; }
+    if(!list.length){ tb.innerHTML='<tr><td colspan="16" style="padding:22px;text-align:left;color:var(--muted)">Nothing matches that filter.</td></tr>'; return; }
     var ae = document.activeElement;
     var keep = (ae && ae.classList && ae.classList.contains('cell-in')) ? ae.getAttribute('data-sym') : null;
     tb.innerHTML = list.map(function(r){
@@ -1741,6 +1908,7 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="num">'+(r.price!=null?INR.format(r.price):'—')+'</td>'+
         '<td><span class="rsi"><span class="v">'+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+meter(r.rsi)+'</span></td>'+
         '<td>'+setupBadges(r.setupTypes, r.agree)+'</td>'+
+        '<td class="num">'+volCell(r)+'</td>'+
         '<td class="num '+(r.atrPct!=null&&r.atrPct>((data.settings&&data.settings.atrPctFloor)||3)?'hot':'stale')+'">'+(r.atrPct!=null?r.atrPct.toFixed(1)+'%':'—')+'</td>'+
         '<td>'+rsCell(r)+'</td>'+
         '<td><input class="cell-in num'+(r.resOverridden?' ovr':'')+'" data-sym="'+esc(r.symbol)+'" type="number" step="0.05" value="'+(r.res!=null?r.res:'')+'" aria-label="Resistance for '+esc(r.symbol)+'"></td>'+
@@ -1759,6 +1927,12 @@ footer b{color:var(--muted); font-weight:600}
     }).join('');
     if(keep){ var again = tb.querySelector('input[data-sym="'+keep.replace(/["\\]/g,'\\$&')+'"]'); if(again) again.focus({preventScroll:true}); }
   }
+
+  document.addEventListener('toggle', function(e){
+    if(e.target && e.target.classList && e.target.classList.contains('secstrip')){
+      secOpen = e.target.open; save();
+    }
+  }, true);
 
   document.addEventListener('change', function(e){
     var t = e.target;
@@ -1797,29 +1971,36 @@ footer b{color:var(--muted); font-weight:600}
   document.addEventListener('click', function(e){
     var b = e.target.closest ? e.target.closest('button') : null;
     if(!b) return;
-    if(b.hasAttribute('data-open')){ var s=b.getAttribute('data-open'); openRow = (openRow===s)?null:s; render(); }
-    else if(b.hasAttribute('data-reset')){ var s2=b.getAttribute('data-reset'); if(over[s2]) delete over[s2].resistance; save(); render(); }
+    if(b.hasAttribute('data-open')){
+      var s=b.getAttribute('data-open'); openRow = (openRow===s)?null:s;
+      keepPut(scopeSel(b, '[data-open="' + s.replace(/["\\]/g, '\\$&') + '"]'), render);
+    }
+    else if(b.hasAttribute('data-reset')){
+      var s2=b.getAttribute('data-reset'); if(over[s2]) delete over[s2].resistance; save();
+      keepPut(scopeSel(b, '[data-open="' + s2.replace(/["\\]/g, '\\$&') + '"]'), render);
+    }
     else if(b.hasAttribute('data-star')){
       var sym = b.getAttribute('data-star');
       if(starred[sym]) delete starred[sym]; else starred[sym] = 1;
-      save(); keepPut(b, render);
+      save(); keepPut(scopeSel(b, '[data-star="' + sym.replace(/["\\]/g, '\\$&') + '"]'), render);
     }
     else if(b.id === 'copyWatch'){ copyWatchlist(b); }
     else if(b.hasAttribute('data-tf')){
-      timeframe = b.getAttribute('data-tf'); shownCount = pageSize; save(); keepPut(b, render);
+      timeframe = b.getAttribute('data-tf'); shownCount = pageSize; save();
+      keepPut('[data-tf="' + timeframe + '"]', render);
     }
     else if(b.hasAttribute('data-setup')){
       var t = b.getAttribute('data-setup');
       var at = picked.indexOf(t);
       if(at >= 0) picked.splice(at, 1); else picked.push(t);
       shownCount = pageSize;
-      save(); keepPut(b, render);
+      save(); keepPut('[data-setup="' + t + '"]', render);
     }
     else if(b.hasAttribute('data-s')){
-      var k = b.getAttribute('data-s'); sel[k] = !sel[k]; save(); render();
+      var k = b.getAttribute('data-s'); sel[k] = !sel[k]; save(); keepPut(b, render);
     }
     else if(b.hasAttribute('data-show')){
-      showTarget = !showTarget; save(); keepPut(b, render);
+      showTarget = !showTarget; save(); keepPut('[data-show="target"]', render);
     }
     else if(b.classList.contains('chip') && b.hasAttribute('data-f')){
       var f = b.getAttribute('data-f');
@@ -2210,7 +2391,7 @@ footer b{color:var(--muted); font-weight:600}
     $('trigZone').innerHTML = '<div class="empty">No scan results yet. Run the <b>Midcap reversal scan</b> workflow once '+
       '(Actions tab → Run workflow) and this page fills in within a couple of minutes. '+
       'It writes <code>data.json</code> next to this page.</div>';
-    $('tbody').innerHTML = '<tr><td colspan="13" style="padding:22px;text-align:left;color:var(--muted)">Waiting on the first scan.</td></tr>';
+    $('tbody').innerHTML = '<tr><td colspan="16" style="padding:22px;text-align:left;color:var(--muted)">Waiting on the first scan.</td></tr>';
   });
 })();
 </script>
