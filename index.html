@@ -77,8 +77,41 @@ input{font:inherit; color:inherit}
 .tcard .sym{display:flex; align-items:center; gap:2px}
 .tcard .symrow{display:flex; align-items:center; gap:4px; flex-wrap:wrap}
 .rrfix{font-family:var(--mono); font-size:14px; color:var(--muted)}
-.showrow{display:flex; align-items:center; gap:10px; margin-top:10px; flex-wrap:wrap}
+.viewctl{display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-left:auto}
+@media (max-width:700px){ .viewctl{margin-left:0; width:100%} .viewctl .search{flex:1 1 100%} }
 .andnote{font-size:12px; color:var(--faint); font-family:var(--mono)}
+.spark{display:block; overflow:visible}
+.spark-line{fill:none; stroke-width:1.4; vector-effect:non-scaling-stroke}
+.spark-line.up{stroke:var(--sprout)} .spark-line.down{stroke:#b3261e}
+.spark-now.up{fill:var(--sprout)} .spark-now.down{fill:#b3261e}
+.spark-entry,.spark-stop,.spark-target{stroke-width:1; stroke-dasharray:2 2; vector-effect:non-scaling-stroke}
+.spark-entry{stroke:var(--brass)} .spark-stop{stroke:#b3261e; opacity:.75}
+.spark-target{stroke:var(--sprout); opacity:.75}
+.spark-off{stroke-dasharray:1 3; opacity:.4}
+.sectag{font-family:var(--mono); font-size:10px; margin-left:5px; padding:0 3px;
+  border:1px solid var(--line); border-radius:2px; color:var(--faint)}
+.sectag.top{color:var(--sprout); border-color:var(--sprout-line)}
+.sectag.bot{color:var(--faint); opacity:.7}
+.secstrip{margin-top:14px; border:1px solid var(--line); border-radius:4px;
+  background:var(--surface); padding:12px 14px}
+.secstrip .hd{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:9px}
+.secbars{display:grid; gap:4px}
+.secbar{display:grid; grid-template-columns:minmax(120px,1.4fr) 1fr auto; gap:10px;
+  align-items:center; font-size:13px}
+.secbar .nm{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.secbar .track{height:7px; background:var(--surface-2); border-radius:2px; position:relative}
+.secbar .fill{position:absolute; top:0; bottom:0; border-radius:2px; background:var(--sprout); opacity:.7}
+.secbar .fill.neg{background:#b3261e; opacity:.6}
+.secbar .val{font-family:var(--mono); font-size:12px; min-width:104px; text-align:right; color:var(--muted)}
+@media (max-width:700px){ .secbar{grid-template-columns:1fr auto} .secbar .track{display:none} }
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .spark-line.down{stroke:#ff8a80}
+  :root:not([data-theme="light"]) .spark-now.down{fill:#ff8a80}
+  :root:not([data-theme="light"]) .spark-stop{stroke:#ff8a80}}
+.sparkcell{width:120px}
+.tspark{margin:8px 0 2px} .tspark .spark{width:100%}
+.mc-spark{margin:8px 0 4px} .mc-spark .spark{width:100%}
+body.no-spark .col-spark{display:none}
+
 body.no-target .col-target{display:none}
 
 /* --- two views ----------------------------------------------------------- */
@@ -440,6 +473,7 @@ footer b{color:var(--muted); font-weight:600}
 
   <div id="viewDesk">
   <div id="demoZone"></div>
+  <div id="secZone"></div>
   <div id="bypassTop"></div>
   <div id="starBanner"></div>
 
@@ -547,10 +581,8 @@ footer b{color:var(--muted); font-weight:600}
       <button class="chip" data-f="starred" aria-pressed="false">★ My watchlist</button>
       <span class="andnote" id="andNote"></span>
     </div>
-    <div class="showrow">
-      <span class="eyebrow">Show</span>
-      <button class="chip" data-show="target" aria-pressed="false">Target &amp; Risk:Reward</button>
-    </div>
+    <div class="viewctl">
+      <button class="chip" data-show="target" aria-pressed="false">Show target &amp; R:R</button>
     <input class="search" id="search" type="search" placeholder="Search any scanned stock by symbol or name" autocomplete="off">
     <select class="sel" id="sort">
       <option value="state">Sort: signal state</option>
@@ -561,6 +593,7 @@ footer b{color:var(--muted); font-weight:600}
       <option value="dist">Sort: closest to breakout</option>
       <option value="sym">Sort: symbol A → Z</option>
     </select>
+    </div>
   </div>
 
   <div id="agreeZone"></div>
@@ -571,7 +604,7 @@ footer b{color:var(--muted); font-weight:600}
     <table>
       <thead>
         <tr>
-          <th class="l">Stock</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
+          <th class="l">Stock</th><th class="col-spark">Chart</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
           <th>ATR %</th><th>vs Nifty</th><th>Resistance ₹</th><th>To break</th><th>Stop ₹</th>
           <th class="col-target">Target ₹</th><th class="col-target">Risk : Reward</th><th>Qty</th><th>State</th><th></th>
         </tr>
@@ -614,6 +647,7 @@ footer b{color:var(--muted); font-weight:600}
     <div id="bypassNote"></div>
     <div id="missingNote"></div>
     <div id="btZone"></div>
+    <div id="filterZone"></div>
   </footer>
 </div>
 
@@ -636,7 +670,7 @@ footer b{color:var(--muted); font-weight:600}
   function isStar(sym){ return !!starred[sym]; }
   var picked=[], agreeMode='all';
   var KEY='midcap-reversal-desk';
-  var COLS=13;
+  var COLS=15;
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -948,7 +982,8 @@ footer b{color:var(--muted); font-weight:600}
           '<div><div class="k">Deploy</div><div class="v'+(r.overBudget?' thin':'')+'">'+
             (r.deploy!=null?money(r.deploy,0):'—')+'</div></div>'+
           '<div><div class="k">At risk</div><div class="v">'+(r.atRisk!=null?money(r.atRisk,0):'—')+'</div></div>'+
-        '</div><div class="why">'+why+(showTarget ? levelNote(r) : '')+
+        '</div><div class="tspark">'+sparkline(r, 260, 42)+'</div>'+
+        '<div class="why">'+why+(showTarget ? levelNote(r) : '')+
           (r.overBudget?' <b>That is over a quarter of your risk capital in one position.</b>':'')+
         '</div></article>';
     }).join('')+'</div>';
@@ -1127,6 +1162,74 @@ footer b{color:var(--muted); font-weight:600}
       bits.push('Stop sits below a support level.');
     }
     return bits.length ? ' ' + bits.join(' ') : '';
+  }
+
+
+  // --- sparkline ------------------------------------------------------------
+  // The shape of the last 25 candles with your entry, stop and target drawn
+  // across it. The point is to let you reject an obviously wrong signal without
+  // opening a broker chart: is the entry right overhead, does the stop sit
+  // under a real low, has the target any room.
+  function sparkSeries(r){
+    if(timeframe === 'daily'){
+      return (r.bars || []).map(function(b){ return b ? b[2] : null; });
+    }
+    return (r.closesW || []).slice();
+  }
+
+  function sparkline(r, w, h){
+    w = w || 108; h = h || 30;
+    var pts = sparkSeries(r).filter(function(v){ return v != null && isFinite(v); });
+    if(pts.length < 3) return '<span class="stale">—</span>';
+
+    var pMin = Math.min.apply(null, pts), pMax = Math.max.apply(null, pts);
+    var span = (pMax - pMin) || (pMax * 0.01) || 1;
+    // Levels widen the scale, but only so far. A target three times the price
+    // range away would flatten the line into a flat thread; past that the
+    // level is drawn at the edge instead of dragging the whole chart with it.
+    var lo = pMin - span * 0.08, hi = pMax + span * 0.08;
+    var cap = span * 1.6;
+    [r.entry, r.stop, r.target].forEach(function(v){
+      if(v == null || !isFinite(v)) return;
+      if(v < lo) lo = Math.max(v, pMin - cap);
+      if(v > hi) hi = Math.min(v, pMax + cap);
+    });
+    var range = (hi - lo) || 1;
+    var y = function(v){ return h - ((v - lo) / range) * h; };
+    var x = function(i){ return (i / (pts.length - 1)) * w; };
+
+    var d = pts.map(function(v, i){ return (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1); }).join(' ');
+    var up = pts[pts.length - 1] >= pts[0];
+
+    function level(v, cls){
+      if(v == null || !isFinite(v)) return '';
+      var clamped = Math.max(lo, Math.min(hi, v));
+      var edge = (v < lo || v > hi) ? ' spark-off' : '';
+      return '<line class="spark-' + cls + edge + '" x1="0" x2="' + w +
+             '" y1="' + y(clamped).toFixed(1) + '" y2="' + y(clamped).toFixed(1) + '"/>';
+    }
+    var tip = 'last ' + pts.length + ' ' + tfLabel(timeframe).toLowerCase() +
+      ' closes' + (r.entry != null ? ' · entry ' + INR.format(r.entry) : '') +
+      (r.stop != null ? ' · stop ' + INR.format(r.stop) : '') +
+      (r.target != null ? ' · target ' + INR.format(r.target) : '');
+
+    return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" width="' + w +
+      '" height="' + h + '" preserveAspectRatio="none" role="img" aria-label="' + esc(tip) +
+      '"><title>' + esc(tip) + '</title>' +
+      level(r.stop, 'stop') + level(r.target, 'target') + level(r.entry, 'entry') +
+      '<path class="spark-line' + (up ? ' up' : ' down') + '" d="' + d + '"/>' +
+      '<circle class="spark-now' + (up ? ' up' : ' down') + '" cx="' + w +
+      '" cy="' + y(pts[pts.length - 1]).toFixed(1) + '" r="2"/></svg>';
+  }
+
+  // Sector strength is information, not a filter. It earns a filter chip only
+  // if the backtest shows a top-third sector genuinely lifts the hit rate.
+  function sectorTag(r){
+    if(r.sectorRank == null) return '';
+    var n = (data.sectorStrength || []).length;
+    var cls = r.sectorTercile === 'top' ? ' top' : (r.sectorTercile === 'bottom' ? ' bot' : '');
+    return '<span class="sectag'+cls+'" title="'+esc(r.industry || '')+
+      ' ranks '+r.sectorRank+' of '+n+' sectors by 12-month strength">#'+r.sectorRank+'</span>';
   }
 
   function rrText(rr){ return (rr == null) ? '—' : '1:' + rr.toFixed(2); }
@@ -1330,6 +1433,7 @@ footer b{color:var(--muted); font-weight:600}
         (r.outperforming!=null?'<span class="mc-chip '+(r.outperforming?'up':'')+'">'+
           (r.outperforming?'beats':'lags')+' Nifty</span>':'')+
       '</div>'+
+      '<div class="mc-spark">'+sparkline(r, 320, 46)+'</div>'+
       '<div class="mc-grid">'+
         mcell('Close', money(r.price))+
         mcell('Entry', money(r.entry))+
@@ -1424,6 +1528,67 @@ footer b{color:var(--muted); font-weight:600}
   // What five years of history says about each pattern. Breakeven at a 2R
   // target is 33.3%, so that line is drawn explicitly -- a pattern below it
   // lost money over the sample however good it looks on a chart.
+  function renderSectors(){
+    var secs = (data && data.sectorStrength) || [];
+    if(!secs.length){ $('secZone').innerHTML = ''; return; }
+    var w = (data.sectorWindows || {});
+    var mx = Math.max.apply(null, secs.map(function(s){ return Math.abs(s.r12 || 0); })) || 1;
+    var reg = data.regime || {};
+    $('secZone').innerHTML = '<div class="secstrip"><div class="hd">'+
+      '<span class="eyebrow">Sector strength</span>'+
+      '<span class="formula">12-month return, skipping the last month'+
+      (w.skip ? ' (' + w.skip + ' sessions)' : '')+'</span>'+
+      (reg.above != null
+        ? '<span class="sectag'+(reg.above?' top':' bot')+'" style="margin-left:auto">Nifty '+
+          (reg.above ? 'above' : 'below')+' its '+reg.ma+'-day average</span>'
+        : '')+
+      '</div><div class="secbars">'+
+      secs.map(function(x){
+        var pct = Math.abs(x.r12 || 0) / mx * 100;
+        var neg = (x.r12 || 0) < 0;
+        return '<div class="secbar"><span class="nm" title="'+esc(x.name)+'">'+
+          esc(x.name)+' <span class="sectag'+(x.tercile==='top'?' top':x.tercile==='bottom'?' bot':'')+
+          '">#'+x.rank+'</span></span>'+
+          '<span class="track"><span class="fill'+(neg?' neg':'')+'" style="'+
+            (neg ? 'right:50%;width:'+(pct/2).toFixed(1)+'%' : 'left:50%;width:'+(pct/2).toFixed(1)+'%')+
+          '"></span></span>'+
+          '<span class="val">'+(x.r12!=null?(x.r12>0?'+':'')+x.r12.toFixed(1)+'%':'—')+
+            (x.r6!=null?' <span style="opacity:.6">6m '+(x.r6>0?'+':'')+x.r6.toFixed(0)+'%</span>':'')+
+          '</span></div>';
+      }).join('')+'</div>'+
+      '<p class="bt-note" style="margin:10px 0 0">Money rotates between sectors over months, '+
+      'which is why this is worth reading on a weekly trade and worthless on a daily one. '+
+      'It breaks ties between similar setups \u2014 it does not make a weak pattern good. '+
+      'Whether it actually helps on your patterns is measured below.</p></div>';
+  }
+
+  function renderFilters(){
+    var bt = data && data.backtest;
+    var f = (bt && bt.filters) || [];
+    var rows = f.filter(function(r){ return r.timeframe === timeframe; });
+    if(!rows.length){ $('filterZone').innerHTML = ''; return; }
+    $('filterZone').innerHTML =
+      '<div class="btwrap"><h3>Do your filters earn their place?</h3>'+
+      '<p class="bt-note">The same historical signals, split by whether each filter would '+
+      'have passed them. <b>Lift</b> is the difference the filter made to the hit rate. '+
+      'A filter near zero is decoration; a negative one is costing you trades. '+
+      'Splits with fewer than 30 signals on either side are left blank rather than '+
+      'reported as findings.</p>'+
+      '<div class="bt-scroll"><table class="bt"><thead><tr><th>Filter</th>'+
+      '<th>Passing it</th><th>Failing it</th><th>Lift</th></tr></thead><tbody>'+
+      rows.map(function(r){
+        var l = r.lift;
+        return '<tr class="'+(l != null && l < 0 ? 'below' : '')+'">'+
+          '<td>'+esc(r.label)+'</td>'+
+          '<td class="n">'+(r['with'].hitRate != null ? r['with'].hitRate.toFixed(1)+'%' : '—')+
+            ' <span style="opacity:.55">n='+r['with'].n+'</span></td>'+
+          '<td class="n">'+(r['without'].hitRate != null ? r['without'].hitRate.toFixed(1)+'%' : '—')+
+            ' <span style="opacity:.55">n='+r['without'].n+'</span></td>'+
+          '<td class="edge'+(l != null && l > 0 ? ' pos' : '')+'">'+
+            (l != null ? (l > 0 ? '+' : '')+l.toFixed(1)+' pts' : 'too few')+'</td></tr>';
+      }).join('')+'</tbody></table></div></div>';
+  }
+
   function renderBacktest(){
     var bt = data && data.backtest;
     if(!bt || !bt.rows || !bt.rows.length){ $('btZone').innerHTML = ''; return; }
@@ -1476,6 +1641,27 @@ footer b{color:var(--muted); font-weight:600}
     if(sector && (data.sectors || []).indexOf(sector) < 0){ sector = ''; save(); }
   }
 
+  // Ticking a filter can take the list from 750 rows to three. The document
+  // gets much shorter, the browser clamps the scroll position, and the page
+  // appears to leap to the middle or the bottom. Measure where the control you
+  // touched sits, re-render, then shift the scroll by the same amount so that
+  // control stays exactly where your eye already is.
+  function keepPut(el, fn){
+    if(!el || !el.getBoundingClientRect){ fn(); return; }
+    var before = el.getBoundingClientRect().top;
+    fn();
+    var after = el.getBoundingClientRect().top;
+    var shift = after - before;
+    if(shift) window.scrollBy(0, shift);
+    // Going from 750 rows to three can leave the document too short to hold
+    // that position, and the browser clamps the scroll. If the control you
+    // pressed ended up off-screen anyway, bring it back into view rather than
+    // leaving you somewhere arbitrary.
+    var r = el.getBoundingClientRect();
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    if(r.bottom < 0 || r.top > vh) el.scrollIntoView({block:'center'});
+  }
+
   function render(){
     $('rptVal').textContent = '₹'+INR0.format(cfg.totalRisk/50);
     if(document.activeElement !== $('minRR')) $('minRR').value = minRR();
@@ -1495,7 +1681,9 @@ footer b{color:var(--muted); font-weight:600}
     cards(list);
     renderFilterChips();
     renderStarBanner();
+    renderSectors();
     renderBacktest();
+    renderFilters();
     var bmsg = bypassed
       ? ('<div class="bypass">Showing every match across all ' +
          (data.rows || []).filter(function(r){ return r.status !== 'nodata'; }).length +
@@ -1548,7 +1736,8 @@ footer b{color:var(--muted); font-weight:600}
           '<button class="star'+(isStar(r.symbol)?' on':'')+'" data-star="'+esc(r.symbol)+
           '" title="follow this stock" aria-pressed="'+isStar(r.symbol)+'">'+(isStar(r.symbol)?'★':'☆')+'</button>'+
           esc(r.symbol)+'</span>'+warnBadges(r.warningTypes)+
-          '<span class="co">'+esc(r.name)+'</span></div></td>'+
+          '<span class="co">'+esc(r.name)+sectorTag(r)+'</span></div></td>'+
+        '<td class="col-spark sparkcell">'+sparkline(r)+'</td>'+
         '<td class="num">'+(r.price!=null?INR.format(r.price):'—')+'</td>'+
         '<td><span class="rsi"><span class="v">'+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+meter(r.rsi)+'</span></td>'+
         '<td>'+setupBadges(r.setupTypes, r.agree)+'</td>'+
@@ -1568,7 +1757,7 @@ footer b{color:var(--muted); font-weight:600}
       '</tr>';
       return openRow===r.symbol ? tr+drawer(r) : tr;
     }).join('');
-    if(keep){ var again = tb.querySelector('input[data-sym="'+keep.replace(/["\\]/g,'\\$&')+'"]'); if(again) again.focus(); }
+    if(keep){ var again = tb.querySelector('input[data-sym="'+keep.replace(/["\\]/g,'\\$&')+'"]'); if(again) again.focus({preventScroll:true}); }
   }
 
   document.addEventListener('change', function(e){
@@ -1582,15 +1771,15 @@ footer b{color:var(--muted); font-weight:600}
     } else if(t.id==='totalRisk'){ cfg.totalRisk = Math.max(0, numv(t.value)||0); save(); render(); }
     else if(t.id==='atrMult'){ cfg.atrMult = Math.max(0.1, numv(t.value)||1.5); save(); render(); }
     else if(t.id==='maxDeploy'){ cfg.maxDeploy = numv(t.value)||0; save(); render(); }
-    else if(t.id==='minRR'){ cfg.minRR = Math.max(1, numv(t.value)||2); save(); render(); }
-    else if(t.id==='sort'){ sortBy = t.value; render(); }
-    else if(t.id==='sectorSel'){ sector = t.value; shownCount = pageSize; save(); render(); }
-    else if(t.id==='uniSel'){ uni = t.value; shownCount = pageSize; save(); render(); }
+    else if(t.id==='minRR'){ cfg.minRR = Math.max(1, numv(t.value)||2); save(); keepPut(t, render); }
+    else if(t.id==='sort'){ sortBy = t.value; keepPut(t, render); }
+    else if(t.id==='sectorSel'){ sector = t.value; shownCount = pageSize; save(); keepPut(t, render); }
+    else if(t.id==='uniSel'){ uni = t.value; shownCount = pageSize; save(); keepPut(t, render); }
     else if(t.hasAttribute && t.hasAttribute('data-note')){
       var s = t.getAttribute('data-note'); over[s] = over[s]||{}; over[s].note = t.value; save();
     }
   });
-  $('search').addEventListener('input', function(e){ search=e.target.value; shownCount=pageSize; render(); });
+  $('search').addEventListener('input', function(e){ search=e.target.value; shownCount=pageSize; keepPut(e.target, render); });
   $('ctrlToggle').addEventListener('click', function(){
     var bar = $('unibar'); var open = bar.classList.toggle('collapsed');
     this.setAttribute('aria-expanded', String(!open));
@@ -1613,24 +1802,24 @@ footer b{color:var(--muted); font-weight:600}
     else if(b.hasAttribute('data-star')){
       var sym = b.getAttribute('data-star');
       if(starred[sym]) delete starred[sym]; else starred[sym] = 1;
-      save(); render();
+      save(); keepPut(b, render);
     }
     else if(b.id === 'copyWatch'){ copyWatchlist(b); }
     else if(b.hasAttribute('data-tf')){
-      timeframe = b.getAttribute('data-tf'); shownCount = pageSize; save(); render();
+      timeframe = b.getAttribute('data-tf'); shownCount = pageSize; save(); keepPut(b, render);
     }
     else if(b.hasAttribute('data-setup')){
       var t = b.getAttribute('data-setup');
       var at = picked.indexOf(t);
       if(at >= 0) picked.splice(at, 1); else picked.push(t);
       shownCount = pageSize;
-      save(); render();
+      save(); keepPut(b, render);
     }
     else if(b.hasAttribute('data-s')){
       var k = b.getAttribute('data-s'); sel[k] = !sel[k]; save(); render();
     }
     else if(b.hasAttribute('data-show')){
-      showTarget = !showTarget; save(); render();
+      showTarget = !showTarget; save(); keepPut(b, render);
     }
     else if(b.classList.contains('chip') && b.hasAttribute('data-f')){
       var f = b.getAttribute('data-f');
@@ -1640,7 +1829,7 @@ footer b{color:var(--muted); font-weight:600}
         if(at >= 0) filters.splice(at, 1); else filters.push(f);
       }
       shownCount = pageSize; save();
-      render();          // render() paints the pressed states from `filters`
+      keepPut(b, render); // render() paints the pressed states from `filters`
     }
   });
 

@@ -145,7 +145,18 @@ BT_HOLD_BARS  = 60      # bars allowed to reach the target before giving up
 # the daily highs and lows, so the scan publishes the last few weeks of them.
 # The dates are shared across every stock, which is what keeps this affordable:
 # per stock it is three numbers a day, not a date string as well.
-BAR_HISTORY  = 25      # five trading weeks: enough to review recent trades
+BAR_HISTORY  = 25
+
+# --- sector strength --------------------------------------------------------
+# Money moves into sectors over months, not days, which is why this is useless
+# to a day trader and worth having when you hold for weeks. Both windows SKIP
+# the most recent month: at roughly a one-month lookback equities show
+# short-term REVERSAL, so including it points the wrong way.
+SECTOR_SKIP   = 21      # trading days left out at the near end (~1 month)
+SECTOR_LONG   = 252     # ~12 months
+SECTOR_SHORT  = 126     # ~6 months
+SECTOR_MIN_N  = 3       # a "sector" of two stocks is two stocks, not a sector
+REGIME_MA     = 200     # benchmark moving average that splits risk-on from off      # five trading weeks: enough to review recent trades
 FRESH_BARS   = 5        # a candlestick setup goes stale after this many sessions
 TREND_BARS   = 10       # sessions of decline that count as "a downtrend before it"
 TWEEZER_TOL_ATR = 0.15  # how equal two lows must be, as a fraction of ATR
@@ -759,9 +770,29 @@ def historical_signals(df: pd.DataFrame) -> list:
     lows_arr, highs_arr = l.to_numpy(float), h.to_numpy(float)
     out = []
 
+    vol = df["Volume"].to_numpy(float) if "Volume" in df.columns else None
+    dates = [d.strftime("%Y-%m-%d") for d in df.index]
+
     def unit(i):
         a = atr[i]
         return a if (a and np.isfinite(a) and a > 0) else float(c.iloc[i]) * 0.01
+
+    def vol_ok(i):
+        if vol is None or i < 5:
+            return None
+        lo = max(0, i - VOL_LOOKBACK)
+        avg = np.nanmean(vol[lo:i]) if i > lo else np.nan
+        return bool(np.isfinite(avg) and avg > 0 and vol[i] >= avg * VOL_CONFIRM_MULT)
+
+    def atr_pct(i):
+        px = float(c.iloc[i])
+        a = atr[i]
+        return round(a / px * 100, 2) if (px > 0 and np.isfinite(a)) else None
+
+    def emit(kind, i, entry, stop):
+        """One historical occurrence, with everything the filter splits need."""
+        out.append({"kind": kind, "i": i, "entry": entry, "stop": stop,
+                    "date": dates[i], "volOK": vol_ok(i), "atrPct": atr_pct(i)})
 
     # --- candlestick setups: local, so just walk the bars -------------------
     for i in range(TREND_BARS + 1, n):
@@ -770,11 +801,10 @@ def historical_signals(df: pd.DataFrame) -> list:
         po, pc = float(o.iloc[i - 1]), float(c.iloc[i - 1])
         co, cc = float(o.iloc[i]), float(c.iloc[i])
         if pc < po and cc > co and cc >= po and co <= pc:
-            out.append(("engulfing", i, float(h.iloc[i]), float(l.iloc[i])))
+            emit("engulfing", i, float(h.iloc[i]), float(l.iloc[i]))
         tol = unit(i) * TWEEZER_TOL_ATR
         if abs(lows_arr[i] - lows_arr[i - 1]) <= tol:
-            out.append(("tweezer", i, float(h.iloc[i]),
-                        min(lows_arr[i], lows_arr[i - 1])))
+            emit("tweezer", i, float(h.iloc[i]), min(lows_arr[i], lows_arr[i - 1]))
 
     plows = pivot_lows(l)
     phighs = pivot_highs(h)
@@ -792,7 +822,7 @@ def historical_signals(df: pd.DataFrame) -> list:
                 continue
             if rsi[b] > rsi[a]:
                 neck = float(h.iloc[a:b + 1].max())
-                out.append(("divergence", b, neck, neck - unit(b) * ATR_MULT))
+                emit("divergence", b, neck, neck - unit(b) * ATR_MULT)
             break
 
     # --- double bottom ------------------------------------------------------
@@ -811,7 +841,7 @@ def historical_signals(df: pd.DataFrame) -> list:
             foot = min(lows_arr[a], lows_arr[b])
             if neck - foot < unit(b) * DBL_MIN_DEPTH_ATR:
                 continue
-            out.append(("doublebottom", b, neck, foot - unit(b) * 0.25))
+            emit("doublebottom", b, neck, foot - unit(b) * 0.25)
             break
 
     # --- inverse head and shoulders ----------------------------------------
@@ -834,11 +864,26 @@ def historical_signals(df: pd.DataFrame) -> list:
                 if abs(vl - vr) > u * HS_SHOULDER_ATR:
                     continue
                 neck = float(h.iloc[ls:r + 1].max())
-                out.append(("invhs", r, neck, vr - u * 0.25))
+                emit("invhs", r, neck, vr - u * 0.25)
                 break
             else:
                 continue
             break
+
+    # Risk:reward as it looked THEN. The nearest swing high already printed
+    # above the entry is the wall price has to get through, which is the same
+    # idea the live scan uses -- without recomputing every level from scratch
+    # for each of several thousand historical signals.
+    hi_at = [(j, highs_arr[j]) for j in phighs]
+    for sig in out:
+        e, st = sig["entry"], sig["stop"]
+        risk = (e - st) if (e is not None and st is not None) else None
+        wall = None
+        if risk and risk > 0:
+            above = [px for j, px in hi_at if j < sig["i"] and px > e * 1.002]
+            if above:
+                wall = min(above)
+        sig["rr"] = round((wall - e) / risk, 2) if (wall and risk) else None
     return out
 
 
@@ -875,15 +920,63 @@ def evaluate_signal(df: pd.DataFrame, i: int, entry: float, stop: float) -> str:
     return "open"
 
 
-def backtest_patterns(frames: dict, symbols: list) -> dict:
-    """Aggregate hit rates per pattern and timeframe across a sample."""
-    stats = {}
+def sector_rank_timeline(series: dict, step: int = 21) -> list:
+    """Sector terciles at monthly checkpoints across the whole history.
+
+    Judging a 2023 signal by today's sector ranking would be look-ahead bias --
+    the single easiest way to make a backtest lie. Ranks move slowly, so
+    monthly checkpoints are plenty and cost a fraction of ranking per signal.
+    """
+    dates = sorted({d for s in series.values() for d in s.index})
+    first = SECTOR_SKIP + SECTOR_LONG + 5
+    out = []
+    for i in range(first, len(dates), step):
+        d = dates[i]
+        ranked = rank_sectors(sector_returns(series, upto=d))
+        if ranked:
+            out.append((d.strftime("%Y-%m-%d"),
+                        {r["name"]: r["tercile"] for r in ranked}))
+    return out
+
+
+def tercile_as_at(timeline: list, date: str, sector: str):
+    """The tercile that sector was in on that date, or None before we can say."""
+    lo, hi, best = 0, len(timeline) - 1, None
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        if timeline[mid][0] <= date:
+            best = timeline[mid][1]
+            lo = mid + 1
+        else:
+            hi = mid - 1
+    return best.get(sector) if best else None
+
+
+def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
+                      timeline: list = None, regime: dict = None) -> dict:
+    """Hit rates per pattern, and per FILTER.
+
+    The second half is the point: every knob on the dashboard is an opinion
+    until it is measured. This splits the same historical signals by whether
+    each filter would have passed them, so you can see which ones move the hit
+    rate and which are decoration.
+    """
+    stats, splits = {}, {}
     scanned = 0
+    floor = ATRPCT_FLOOR
+
+    def note(key, label, tf, passed, verdict):
+        rec = splits.setdefault(f"{key}|{tf}", {
+            "filter": key, "label": label, "timeframe": tf,
+            "with": {"win": 0, "loss": 0}, "without": {"win": 0, "loss": 0}})
+        rec["with" if passed else "without"][verdict] += 1
+
     for sym in symbols:
         daily = frames.get(sym)
         if daily is None or len(daily) < 120:
             continue
         scanned += 1
+        sector = ((meta or {}).get(sym) or {}).get("industry")
         for tf in TIMEFRAMES:
             frame = resample_tf(daily, tf)
             if len(frame) < 80:
@@ -892,24 +985,58 @@ def backtest_patterns(frames: dict, symbols: list) -> dict:
                 signals = historical_signals(frame)
             except Exception:  # noqa: BLE001
                 continue
-            for kind, i, entry, stop in signals:
-                verdict = evaluate_signal(frame, i, entry, stop)
-                if not verdict:
+            for sig in signals:
+                verdict = evaluate_signal(frame, sig["i"], sig["entry"], sig["stop"])
+                if verdict not in ("win", "loss"):
                     continue
-                key = f"{kind}|{tf}"
-                rec = stats.setdefault(key, {"pattern": kind, "timeframe": tf,
+                key = f"{sig['kind']}|{tf}"
+                rec = stats.setdefault(key, {"pattern": sig["kind"], "timeframe": tf,
                                              "win": 0, "loss": 0, "open": 0})
                 rec[verdict] += 1
 
-    out = []
+                if sig.get("volOK") is not None:
+                    note("volume", "Volume confirmed on the signal bar", tf,
+                         sig["volOK"], verdict)
+                if sig.get("atrPct") is not None:
+                    note("atrpct", f"ATR% above {floor:.0f}", tf,
+                         sig["atrPct"] > floor, verdict)
+                if sig.get("rr") is not None:
+                    note("rr", f"Risk:reward at least 1:{MIN_RR:.0f}", tf,
+                         sig["rr"] >= MIN_RR, verdict)
+                if timeline and sector:
+                    terc = tercile_as_at(timeline, sig["date"], sector)
+                    if terc:
+                        note("sector", "Sector in the top third", tf,
+                             terc == "top", verdict)
+                if regime:
+                    up = regime.get(sig["date"])
+                    if up is not None:
+                        note("regime", f"Nifty above its {REGIME_MA}-day average",
+                             tf, up, verdict)
+
     for rec in stats.values():
         decided = rec["win"] + rec["loss"]
         rec["n"] = decided + rec["open"]
         rec["hitRate"] = round(rec["win"] / decided * 100, 1) if decided else None
-        out.append(rec)
-    out.sort(key=lambda r: (r["timeframe"], -(r["hitRate"] or 0)))
-    return {"sample": scanned, "targetR": BT_TARGET_R,
-            "holdBars": BT_HOLD_BARS, "rows": out}
+    rows = sorted(stats.values(), key=lambda r: (r["timeframe"], -(r["hitRate"] or 0)))
+
+    fil = []
+    for rec in splits.values():
+        for side in ("with", "without"):
+            d = rec[side]
+            n = d["win"] + d["loss"]
+            d["n"] = n
+            d["hitRate"] = round(d["win"] / n * 100, 1) if n else None
+        a, b = rec["with"]["hitRate"], rec["without"]["hitRate"]
+        # Too few either side and the difference is noise, not a finding.
+        enough = rec["with"]["n"] >= 30 and rec["without"]["n"] >= 30
+        rec["lift"] = round(a - b, 1) if (a is not None and b is not None and enough) else None
+        rec["enough"] = enough
+        fil.append(rec)
+    fil.sort(key=lambda r: (r["timeframe"], -(r["lift"] if r["lift"] is not None else -99)))
+
+    return {"sample": scanned, "targetR": BT_TARGET_R, "holdBars": BT_HOLD_BARS,
+            "rows": rows, "filters": fil}
 
 
 def size_setup(setup: dict, price: float) -> dict:
@@ -956,6 +1083,76 @@ def comparative_strength(close: pd.Series, bench: pd.Series, period: int = CRS_P
     if not np.isfinite(last_avg) or last_avg == 0:
         return None, None
     return (last >= last_avg), round((last / last_avg - 1) * 100, 2)
+
+
+def sector_series(frames: dict, meta: dict) -> tuple:
+    """A daily index per sector, built from its members' own closes.
+
+    Each member is normalised to its own first close so a 3,000-rupee stock
+    does not drown a 30-rupee one, then the members are averaged. The result is
+    a series you can measure like any other price series -- which is what lets
+    the backtest ask what a sector looked like on a date five years ago instead
+    of judging an old signal by today's ranking.
+    """
+    by_sector = {}
+    for sym, df in frames.items():
+        ind = (meta.get(sym) or {}).get("industry") or "Unclassified"
+        if ind in ("", "Unclassified"):
+            continue
+        close = df["Close"].dropna()
+        if len(close) < SECTOR_SKIP + 30:
+            continue
+        base = float(close.iloc[0])
+        if not np.isfinite(base) or base <= 0:
+            continue
+        by_sector.setdefault(ind, []).append(close / base)
+
+    series, counts = {}, {}
+    for ind, members in by_sector.items():
+        if len(members) < SECTOR_MIN_N:
+            continue
+        series[ind] = pd.concat(members, axis=1).mean(axis=1).dropna()
+        counts[ind] = len(members)
+    return series, counts
+
+
+def sector_returns(series: dict, upto=None) -> dict:
+    """Trailing 12-1 and 6-1 returns per sector, as at `upto` (default: today).
+
+    Passing a past date is the whole point -- it is how a signal from 2023 gets
+    judged by the sector ranking that existed in 2023.
+    """
+    out = {}
+    for ind, s in series.items():
+        s2 = s if upto is None else s[s.index <= upto]
+        n = len(s2)
+        if n < SECTOR_SKIP + 40:
+            continue
+        end = float(s2.iloc[-1 - SECTOR_SKIP])          # skip the last month
+        def ret(span):
+            if n < span + SECTOR_SKIP + 1:
+                return None
+            start = float(s2.iloc[-1 - SECTOR_SKIP - span])
+            return round((end / start - 1) * 100, 2) if start > 0 else None
+        r12, r6 = ret(SECTOR_LONG), ret(SECTOR_SHORT)
+        if r12 is None and r6 is None:
+            continue
+        out[ind] = {"r12": r12, "r6": r6}
+    return out
+
+
+def rank_sectors(rets: dict, counts: dict = None) -> list:
+    """Rank by the 12-month reading and split into thirds."""
+    rows = [{"name": k, "r12": v["r12"], "r6": v["r6"],
+             "members": (counts or {}).get(k)}
+            for k, v in rets.items() if v["r12"] is not None]
+    rows.sort(key=lambda r: -r["r12"])
+    n = len(rows)
+    for i, r in enumerate(rows):
+        r["rank"] = i + 1
+        r["of"] = n
+        r["tercile"] = "top" if i < n / 3 else ("bottom" if i >= 2 * n / 3 else "mid")
+    return rows
 
 
 def resample_tf(df: pd.DataFrame, tf: str) -> pd.DataFrame:
@@ -1266,6 +1463,11 @@ def build_record(symbol: str, name: str, meta: dict, daily: pd.DataFrame,
     rec["barDates"] = [d.strftime("%Y-%m-%d") for d in tail.index]
     rec["bars"] = [[round(float(h), 2), round(float(l), 2), round(float(c), 2)]
                    for h, l, c in zip(tail["High"], tail["Low"], tail["Close"])]
+    # Weekly closes so the sparkline spans the same candles as the rest of the
+    # row. A chart showing five weeks while you trade weekly would mislead.
+    # Closes only -- a sparkline needs the shape, not the highs and lows.
+    wk = resample_tf(daily, "weekly").tail(BAR_HISTORY)
+    rec["closesW"] = [round(float(c), 2) for c in wk["Close"]]
 
     rec["tf"] = {}
     last_daily = daily.index[-1].strftime("%Y-%m-%d") if len(daily) else None
@@ -1440,6 +1642,32 @@ def main() -> int:
                 packed[i] = bar
         r["bars"] = packed
 
+    # --- sector strength ---------------------------------------------------
+    print("measuring sector strength", flush=True)
+    sec_series, sec_counts = sector_series(frames, meta)
+    sectors_ranked = rank_sectors(sector_returns(sec_series), sec_counts)
+    for r in sectors_ranked[:3] + (["..."] if len(sectors_ranked) > 6 else []) + sectors_ranked[-3:]:
+        if r == "...":
+            print("   ...", flush=True); continue
+        print(f"  {r['rank']:>2}. {r['name'][:28]:<28} 12m {str(r['r12']):>7}%  "
+              f"6m {str(r['r6']):>7}%  ({r['members']} stocks, {r['tercile']})", flush=True)
+    terc_now = {r["name"]: r["tercile"] for r in sectors_ranked}
+    rank_now = {r["name"]: r["rank"] for r in sectors_ranked}
+    for row in rows:
+        ind = row.get("industry")
+        row["sectorRank"] = rank_now.get(ind)
+        row["sectorTercile"] = terc_now.get(ind)
+
+    # --- market regime ------------------------------------------------------
+    regime_map, regime_now = {}, None
+    if bench is not None and len(bench) > REGIME_MA:
+        ma = bench.rolling(REGIME_MA).mean()
+        above = (bench > ma).dropna()
+        regime_map = {d.strftime("%Y-%m-%d"): bool(v) for d, v in above.items()}
+        regime_now = bool(above.iloc[-1])
+        print(f"market regime: Nifty is {'ABOVE' if regime_now else 'BELOW'} its "
+              f"{REGIME_MA}-day average", flush=True)
+
     backtest = None
     if BACKTEST:
         # Evenly spaced across the watchlist so the sample spans large, mid,
@@ -1450,12 +1678,20 @@ def main() -> int:
         print(f"backtesting {len(sample)} of {len(have)} stocks "
               f"({BT_TARGET_R:.0f}R target, {BT_HOLD_BARS}-bar horizon)", flush=True)
         t0 = time.time()
-        backtest = backtest_patterns(frames, sample)
+        timeline = sector_rank_timeline(sec_series)
+        backtest = backtest_patterns(frames, sample, meta, timeline, regime_map)
         print(f"  took {time.time() - t0:.0f}s", flush=True)
         for rec in backtest["rows"]:
             rate = f"{rec['hitRate']}%" if rec["hitRate"] is not None else "n/a"
             print(f"  {rec['pattern']:<14} {rec['timeframe']:<7} "
                   f"{rate:>6} of {rec['win'] + rec['loss']:>5} decided", flush=True)
+        print("  --- do the filters earn their place? ---", flush=True)
+        for rec in backtest["filters"]:
+            lift = f"{rec['lift']:+.1f} pts" if rec["lift"] is not None else "too few"
+            print(f"  {rec['filter']:<8} {rec['timeframe']:<7} "
+                  f"with {str(rec['with']['hitRate']):>5}% (n={rec['with']['n']:>5})  "
+                  f"without {str(rec['without']['hitRate']):>5}% (n={rec['without']['n']:>5})  "
+                  f"-> {lift}", flush=True)
 
     rank = {"triggered": 0, "armed": 1, "oversold": 2, "overbought": 3,
             "watching": 4, "nodata": 5}
@@ -1478,6 +1714,10 @@ def main() -> int:
         "backtest": backtest,
         "minRR": MIN_RR,
         "barDates": axis,
+        "sectorStrength": sectors_ranked,
+        "sectorWindows": {"long": SECTOR_LONG, "short": SECTOR_SHORT,
+                          "skip": SECTOR_SKIP},
+        "regime": {"above": regime_now, "ma": REGIME_MA},
         "baseTimeframe": BASE_TF,
         "timeframes": [
             {"key": tf, "label": TF_LABEL.get(tf, tf),
