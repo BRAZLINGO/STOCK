@@ -262,12 +262,43 @@ VP_VALUE_AREA = 0.70    # the band holding this share of the volume
 VP_SHELF_SHARE = 0.045  # a single bin holding this much volume is a wall
 VP_THIN      = 0.12     # overhead volume below this share is a clear runway
 
+# --- pattern families, for the cross-tab ------------------------------------
+# Splitting thirteen patterns by six filters gives 156 cells, and the rarer
+# patterns do not have the trades to fill their own. Families do: they answer
+# "does this filter help THIS KIND of setup" while there is still too little
+# history to answer it pattern by pattern.
+FAMILIES = {
+    "structure":    ("doublebottom", "invhs", "rounding", "cuphandle",
+                     "asctriangle", "symtriangle"),
+    "continuation": ("flag", "pennant", "rectangle"),
+    "candle":       ("engulfing", "tweezer"),
+    "divergence":   ("divergence", "flowdiv"),
+}
+FAMILY_LABEL = {
+    "structure":    "Structures (H&S, cup, rounding, triangles, double bottom)",
+    "continuation": "Continuations (flag, pennant, rectangle)",
+    "candle":       "Candlesticks (engulfing, tweezer)",
+    "divergence":   "Divergences (RSI, money flow)",
+}
+FAMILY_OF = {p: f for f, ps in FAMILIES.items() for p in ps}
+
+# A cross-tab cell needs more evidence than a one-factor row, because there are
+# far more of them and therefore far more chances for one to look good by
+# accident. 156 cells at ordinary significance would hand you about eight
+# convincing findings from pure noise.
+BT_MIN_CELL = 40
+
 # --- backtest ---------------------------------------------------------------
 BACKTEST      = True    # set False to skip it and shorten the run
-BT_SAMPLE     = 200     # stocks sampled. Five years x 200 names already gives
-                        # thousands of occurrences per pattern; scanning all
-                        # 750 would cost minutes to change a number in the
-                        # third decimal place.
+BT_SAMPLE     = 0       # 0 = every stock. It was 200, which was plenty for the
+                        # one-factor table but not for the CROSS-TAB: splitting
+                        # 190 inverse-head-and-shoulders trades by a filter that
+                        # passes a fifth of signals leaves 39 trades, and 39
+                        # trades answer nothing. The whole universe multiplies
+                        # every cell by about 3.75 and costs two more minutes.
+                        # Set a number here to sample instead of scanning
+                        # every stock, if the runtime ever matters more than
+                        # the cross-tab's sample sizes.
 BT_TARGET_R   = 2.0     # "success" = reached this multiple of risk
 BT_TRIGGER_BARS = 20    # bars allowed for the entry to trigger at all
 BT_HOLD_BARS  = 60      # bars allowed to reach the target before giving up
@@ -338,6 +369,35 @@ IST          = timezone(timedelta(hours=5, minutes=30))
 # ----------------------------------------------------------------------------
 # Indicators
 # ----------------------------------------------------------------------------
+def json_safe(o):
+    """Make a payload legal JSON.
+
+    NaN and Infinity are legal in Python and ILLEGAL in JSON. One of them
+    anywhere in data.json and the browser's JSON.parse throws, the dashboard
+    shows "no scan results yet", and a perfectly good scan looks like a failed
+    one -- with no error anybody can see. Numpy types need coercing for the
+    same reason.
+
+    This lives at module level rather than inside main() so the test suite can
+    reach it. A guard nothing can test is not much of a guard: this exact bug
+    reached the live page once already.
+    """
+    if isinstance(o, float):
+        return o if math.isfinite(o) else None
+    if isinstance(o, np.floating):
+        v = float(o)
+        return v if math.isfinite(v) else None
+    if isinstance(o, np.integer):
+        return int(o)
+    if isinstance(o, (np.bool_, bool)):
+        return bool(o)
+    if isinstance(o, dict):
+        return {k: json_safe(v) for k, v in o.items()}
+    if isinstance(o, (list, tuple)):
+        return [json_safe(v) for v in o]
+    return o
+
+
 def wilder_smooth(series: pd.Series, period: int) -> pd.Series:
     """Wilder's smoothing: seed with the simple average of the first `period`
     readings, then carry it forward as (prev * (n-1) + new) / n.
@@ -2205,15 +2265,40 @@ def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
     each filter would have passed them, so you can see which ones move the hit
     rate and which are decoration.
     """
-    stats, splits = {}, {}
+    stats, splits, cross = {}, {}, {}
     scanned = 0
     floor = ATRPCT_FLOOR
+    # The signal currently being scored. `note` is called once per filter and
+    # needs to know which pattern it belongs to; passing it through every call
+    # site would be six more arguments to keep in step.
+    current = {"kind": None}
 
     def note(key, label, tf, passed, verdict):
         rec = splits.setdefault(f"{key}|{tf}", {
             "filter": key, "label": label, "timeframe": tf,
             "with": {"win": 0, "loss": 0}, "without": {"win": 0, "loss": 0}})
         rec["with" if passed else "without"][verdict] += 1
+
+        # ...and the same split again, once for this pattern and once for its
+        # family. This is the whole point of the cross-tab: an average lift of
+        # +3.4 points could be +17 in one pattern and zero everywhere else,
+        # and the one-factor table cannot tell those apart.
+        kind = current["kind"]
+        if not kind:
+            return
+        for group, gkind in ((kind, "pattern"),
+                             (FAMILY_OF.get(kind), "family")):
+            if not group:
+                continue
+            # Namespaced by groupKind on purpose. The family "divergence"
+            # and the pattern "divergence" share a name, so an unqualified key
+            # put both increments in the same cell and counted every
+            # divergence signal twice.
+            cell = cross.setdefault(f"{gkind}:{group}|{key}|{tf}", {
+                "group": group, "groupKind": gkind, "filter": key,
+                "label": label, "timeframe": tf,
+                "with": {"win": 0, "loss": 0}, "without": {"win": 0, "loss": 0}})
+            cell["with" if passed else "without"][verdict] += 1
 
     for sym in symbols:
         daily = frames.get(sym)
@@ -2236,6 +2321,7 @@ def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
                 verdict = evaluate_signal(frame, sig["i"], sig["entry"], sig["stop"])
                 if verdict not in ("win", "loss"):
                     continue
+                current["kind"] = sig["kind"]
                 key = f"{sig['kind']}|{tf}"
                 rec = stats.setdefault(key, {"pattern": sig["kind"], "timeframe": tf,
                                              "win": 0, "loss": 0, "open": 0})
@@ -2299,8 +2385,27 @@ def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
         fil.append(rec)
     fil.sort(key=lambda r: (r["timeframe"], -(r["lift"] if r["lift"] is not None else -99)))
 
+    cells = []
+    for rec in cross.values():
+        for side in ("with", "without"):
+            d = rec[side]
+            n = d["win"] + d["loss"]
+            d["n"] = n
+            d["hitRate"] = round(d["win"] / n * 100, 1) if n else None
+        a, b = rec["with"]["hitRate"], rec["without"]["hitRate"]
+        enough = (rec["with"]["n"] >= BT_MIN_CELL and
+                  rec["without"]["n"] >= BT_MIN_CELL)
+        rec["lift"] = (round(a - b, 1)
+                       if (a is not None and b is not None and enough) else None)
+        rec["enough"] = enough
+        cells.append(rec)
+    cells.sort(key=lambda r: (r["timeframe"], r["groupKind"] != "family",
+                              r["group"], r["filter"]))
+
     return {"sample": scanned, "targetR": BT_TARGET_R, "holdBars": BT_HOLD_BARS,
-            "rows": rows, "filters": fil}
+            "rows": rows, "filters": fil, "cross": cells,
+            "minCell": BT_MIN_CELL,
+            "familyLabels": FAMILY_LABEL}
 
 
 def size_setup(setup: dict, price: float) -> dict:
@@ -3025,8 +3130,11 @@ def main() -> int:
         # Evenly spaced across the watchlist so the sample spans large, mid,
         # small and micro caps rather than whichever names sort first.
         have = [r["symbol"] for r in watchlist if r["symbol"] in frames]
-        step = max(1, len(have) // BT_SAMPLE)
-        sample = have[::step][:BT_SAMPLE]
+        if BT_SAMPLE and BT_SAMPLE < len(have):
+            step = max(1, len(have) // BT_SAMPLE)
+            sample = have[::step][:BT_SAMPLE]
+        else:
+            sample = have
         print(f"backtesting {len(sample)} of {len(have)} stocks "
               f"({BT_TARGET_R:.0f}R target, {BT_HOLD_BARS}-bar horizon)", flush=True)
         t0 = time.time()
@@ -3107,26 +3215,6 @@ def main() -> int:
         "missing": sorted(set(missing)),
         "rows": rows,
     }
-    # NaN and Infinity are legal in Python and ILLEGAL in JSON. One of them
-    # anywhere in this file and the browser's JSON.parse throws, the dashboard
-    # shows "no scan results yet", and a perfectly good scan looks like a
-    # failed one. Numpy types need coercing for the same reason.
-    def json_safe(o):
-        if isinstance(o, float):
-            return o if math.isfinite(o) else None
-        if isinstance(o, np.floating):
-            v = float(o)
-            return v if math.isfinite(v) else None
-        if isinstance(o, np.integer):
-            return int(o)
-        if isinstance(o, (np.bool_, bool)):
-            return bool(o)
-        if isinstance(o, dict):
-            return {k: json_safe(v) for k, v in o.items()}
-        if isinstance(o, (list, tuple)):
-            return [json_safe(v) for v in o]
-        return o
-
     payload = json_safe(payload)
 
     # Compact separators, not indent=1. At ~750 stocks the pretty version is

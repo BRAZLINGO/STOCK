@@ -353,6 +353,50 @@ tbody tr.fire td:first-child{background:linear-gradient(var(--brass-soft),var(--
 .volx.on{color:var(--sprout); font-weight:600}
 .volx.on::before{content:"\25B2"; font-size:8px; margin-right:3px; vertical-align:1px}
 .volx.off{color:var(--faint)}
+/* --- the cross-tab -------------------------------------------------------
+   A diverging scale: three equal steps each side of a neutral middle, built
+   by mixing the page's own two polarity tokens toward the surface rather than
+   by picking new colours. Text stays in ink so contrast never depends on the
+   tint, and every cell carries an arrow and a sign, because green against red
+   is not separable under deuteranopia (measured 5.2 on the dark surface) and
+   nothing here may rest on hue alone. */
+.xtab td,.xtab th{text-align:center}
+.xtab th{font-size:10.5px; line-height:1.25; font-weight:600; min-width:78px}
+.xtab .xname{text-align:left; white-space:nowrap; font-size:12px; min-width:210px}
+.xtab .xn{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-left:8px}
+.xtab tr.xfam .xname{font-weight:700}
+.xtab tr.xfam td{background:var(--surface-2)}
+.xc{font-family:var(--mono); font-size:12px; color:var(--ink); white-space:nowrap}
+.xc i{font-style:normal; font-size:8px; margin-right:3px; vertical-align:1px}
+.xc.none,.xc.thin{color:var(--faint); cursor:help}
+.xc.s0{color:var(--muted)}
+.xc.up.s1{background:color-mix(in oklab, var(--sprout) 10%, var(--surface))}
+.xc.up.s2{background:color-mix(in oklab, var(--sprout) 22%, var(--surface))}
+.xc.up.s3{background:color-mix(in oklab, var(--sprout) 36%, var(--surface))}
+.xc.down.s1{background:color-mix(in oklab, var(--clay) 10%, var(--surface))}
+.xc.down.s2{background:color-mix(in oklab, var(--clay) 22%, var(--surface))}
+.xc.down.s3{background:color-mix(in oklab, var(--clay) 36%, var(--surface))}
+.xlegend .xc{display:inline-block; padding:2px 6px; border-radius:2px; margin:0 2px}
+/* Risk across the book. The heavy row is marked with a left bar as well as a
+   colour, so the warning does not depend on seeing red. */
+.bookrows{display:flex; flex-direction:column}
+.bookrow{display:grid; grid-template-columns:minmax(120px,1.1fr) 90px 1fr auto;
+  gap:10px; align-items:baseline; padding:8px 13px; border-top:1px solid var(--line-soft);
+  font-size:13px}
+.bookrow:first-child{border-top:0}
+.bookrow.heavy{background:var(--clay-soft); border-left:3px solid var(--clay);
+  padding-left:10px}
+.bookrow .bs{font-weight:600; color:var(--ink)}
+.bookrow .bn{font-family:var(--mono); font-size:12px; color:var(--muted)}
+.bookrow .bm{font-size:12px; color:var(--faint); overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap}
+.bookrow .bp{font-family:var(--mono); font-size:13px; color:var(--ink); text-align:right}
+.bookrow .bp i{font-style:normal; color:var(--faint); font-size:11px; margin-left:7px}
+.bt-note.warn{color:var(--clay); padding:10px 13px 13px}
+@media (max-width:700px){
+  .bookrow{grid-template-columns:1fr auto; row-gap:2px}
+  .bookrow .bm{grid-column:1/-1}
+}
 .dlv{font-family:var(--mono); font-size:12px; color:var(--muted)}
 .dlv.on{color:var(--sprout); font-weight:600}
 .dlv i{font-style:normal; font-size:10.5px; color:var(--faint); margin-left:4px}
@@ -677,6 +721,7 @@ footer b{color:var(--muted); font-weight:600}
 
   <div id="viewDash" hidden>
     <div class="dashgrid" id="dashStats"></div>
+    <div id="bookRisk"></div>
 
     <div class="tradebox">
       <div class="tradehead">
@@ -704,6 +749,7 @@ footer b{color:var(--muted); font-weight:600}
     <div id="missingNote"></div>
     <div id="btZone"></div>
     <div id="filterZone"></div>
+    <div id="crossZone"></div>
   </footer>
 </div>
 
@@ -1852,6 +1898,112 @@ footer b{color:var(--muted); font-weight:600}
       'Whether it actually helps on your patterns is measured below.</p></details>';
   }
 
+
+  // --- the cross-tab -------------------------------------------------------
+  // The one-factor table says "volume is worth +3.4 points" averaged over
+  // every signal. That single number is equally consistent with +17 in one
+  // pattern and nothing anywhere else. This table asks the question the other
+  // way round: for THIS pattern, is THIS filter worth anything?
+  //
+  // Colour is decorative here and nothing depends on it. Green and red sit at
+  // a CVD separation of 5.2 under deuteranopia on the dark surface, which
+  // means a colourblind reader cannot tell the two tints apart -- so every
+  // cell also carries an arrow and an explicit sign, and the number itself is
+  // always printed. Three channels, only one of which is hue.
+  var FILTER_SHORT = {
+    volume:     'Volume on<br>the signal',
+    bvol:       'Volume on<br>the breakout',
+    deliv:      'Delivery<br>above 65%',
+    delivspike: 'Delivery above<br>its own average',
+    atrpct:     'ATR%<br>above 3',
+    rr:         'Risk:reward<br>at least 1:2',
+    sector:     'Sector in<br>the top third',
+    regime:     'Nifty above<br>200-day'
+  };
+  function liftCell(c, minCell){
+    if(!c){
+      return '<td class="xc none" title="this combination never occurred">\u00b7</td>';
+    }
+    var nw = c['with'].n, no = c['without'].n;
+    if(c.lift == null){
+      return '<td class="xc thin" title="'+nw+' trades with, '+no+' without \u2014 '+
+        'fewer than '+minCell+' on one side, so no number is reported">\u00b7</td>';
+    }
+    var v = c.lift;
+    var mag = Math.abs(v);
+    var step = mag >= 10 ? 3 : mag >= 5 ? 2 : mag >= 2 ? 1 : 0;
+    var dir = v > 0 ? 'up' : (v < 0 ? 'down' : 'flat');
+    var glyph = step === 0 ? '' : (v > 0 ? '\u25b2' : '\u25bc');
+    var tip = c['with'].hitRate.toFixed(1)+'% with (n='+nw+') vs '+
+              c['without'].hitRate.toFixed(1)+'% without (n='+no+')';
+    return '<td class="xc s'+step+' '+dir+'" title="'+esc(tip)+'">'+
+      (glyph ? '<i>'+glyph+'</i>' : '')+
+      (v > 0 ? '+' : v < 0 ? '\u2212' : '') + mag.toFixed(1)+'</td>';
+  }
+
+  function renderCross(){
+    var bt = data && data.backtest;
+    var cells = (bt && bt.cross) || [];
+    var here = cells.filter(function(c){ return c.timeframe === timeframe; });
+    if(!here.length){ $('crossZone').innerHTML = ''; return; }
+    var minCell = bt.minCell || 40;
+    var famLabels = bt.familyLabels || {};
+
+    var filters = [], seen = {};
+    here.forEach(function(c){ if(!seen[c.filter]){ seen[c.filter]=1; filters.push(c.filter); } });
+
+    var byGroup = {};
+    here.forEach(function(c){
+      var g = byGroup[c.groupKind+':'+c.group] ||
+        (byGroup[c.groupKind+':'+c.group] = {kind:c.groupKind, name:c.group, n:0, cells:{}});
+      g.cells[c.filter] = c;
+      g.n = Math.max(g.n, c['with'].n + c['without'].n);
+    });
+    var groups = Object.keys(byGroup).map(function(k){ return byGroup[k]; });
+    var fams = groups.filter(function(g){ return g.kind === 'family'; })
+                     .sort(function(a,b){ return b.n - a.n; });
+    var pats = groups.filter(function(g){ return g.kind === 'pattern'; })
+                     .sort(function(a,b){ return b.n - a.n; });
+
+    function rowFor(g){
+      var label = g.kind === 'family'
+        ? (famLabels[g.name] || g.name)
+        : setupLabel(g.name);
+      return '<tr class="'+(g.kind === 'family' ? 'xfam' : '')+'">'+
+        '<td class="xname">'+esc(label)+'<span class="xn">'+g.n+'</span></td>'+
+        filters.map(function(f){ return liftCell(g.cells[f], minCell); }).join('')+
+        '</tr>';
+    }
+
+    $('crossZone').innerHTML =
+      '<div class="btwrap"><h3>Which filter helps which pattern</h3>'+
+      '<p class="bt-note">The table above averages each filter over every signal. '+
+      'An average of +3 points could be +17 in one pattern and nothing in the '+
+      'rest, and those mean completely different trades. Each cell here is the '+
+      'difference that filter made <b>to that pattern alone</b>, in percentage '+
+      'points of hit rate, on '+esc(tfLabel(timeframe).toLowerCase())+' candles. '+
+      'Families come first because they have the trades to answer while the '+
+      'individual patterns still do not. A dot means fewer than '+minCell+
+      ' trades on one side \u2014 withheld rather than reported. Hover any cell '+
+      'for both hit rates and both sample sizes.</p>'+
+      '<div class="bt-scroll"><table class="bt xtab"><thead><tr>'+
+      '<th class="xname">Pattern</th>'+
+      filters.map(function(f){
+        return '<th>'+(FILTER_SHORT[f] || esc(f))+'</th>'; }).join('')+
+      '</tr></thead><tbody>'+
+      fams.map(rowFor).join('') + pats.map(rowFor).join('')+
+      '</tbody></table></div>'+
+      '<p class="bt-note xlegend"><b>Reading it:</b> '+
+      '<span class="xc s3 up"><i>\u25b2</i>+12.0</span> the filter is worth a lot to '+
+      'that pattern &nbsp;&middot;&nbsp; '+
+      '<span class="xc s1 down"><i>\u25bc</i>\u22123.0</span> it costs you trades '+
+      '&nbsp;&middot;&nbsp; <span class="xc s0 flat">+0.4</span> it does nothing. '+
+      'With '+(filters.length * groups.length)+' cells in this table, a few will '+
+      'look convincing by pure chance \u2014 treat a surprising cell as something '+
+      'to watch for another quarter, not as a reason to size up.</p>'+
+      '</div>';
+  }
+
   function renderFilters(){
     var bt = data && data.backtest;
     var f = (bt && bt.filters) || [];
@@ -2018,6 +2170,7 @@ footer b{color:var(--muted); font-weight:600}
     renderSectors();
     renderBacktest();
     renderFilters();
+    renderCross();
     var bmsg = bypassed
       ? ('<div class="bypass">Showing every match across all ' +
          (data.rows || []).filter(function(r){ return r.status !== 'nodata'; }).length +
@@ -2267,6 +2420,38 @@ footer b{color:var(--muted); font-weight:600}
     return pl / (risk * t.qty);
   }
 
+  // What you actually paid against what the desk asked for. This is the
+  // single number that separates a backtest from an account: the backtest
+  // assumes you fill at the signal price, and in a midcap you do not.
+  function slippageR(t){
+    if(t.signal == null || t.entry == null) return null;
+    var risk = (t.entry != null && t.stop != null) ? (t.entry - t.stop) : null;
+    if(!risk || risk <= 0) return null;
+    return (t.entry - t.signal) / risk;      // positive = you paid up
+  }
+
+  // The longest run of losing trades, and the deepest the running total has
+  // been below its own best. A system can have a positive expectancy and
+  // still take you out on the way there.
+  function drawdown(closed){
+    var run = 0, worstRun = 0, cum = 0, peak = 0, worst = 0;
+    closed.slice().sort(function(a,b){
+      return String(a.exit.date||'').localeCompare(String(b.exit.date||''));
+    }).forEach(function(t){
+      var pl = tradePL(t) || 0;
+      cum += pl;
+      if(cum > peak) peak = cum;
+      if(peak - cum > worst) worst = peak - cum;
+      if(pl <= 0){ run++; if(run > worstRun) worstRun = run; } else { run = 0; }
+    });
+    return {streak:run, worstStreak:worstRun, depth:worst};
+  }
+
+  function sectorOf(sym){
+    var r = ((data && data.rows) || []).filter(function(x){ return x.symbol === sym; })[0];
+    return (r && r.industry) || null;
+  }
+
   function metrics(){
     var closed = trades.filter(function(t){ return t.exit; });
     var open = trades.filter(function(t){ return !t.exit; });
@@ -2291,7 +2476,31 @@ footer b{color:var(--muted); font-weight:600}
       openRisk: open.reduce(function(a,t){
         var risk = (t.entry != null && t.stop != null) ? (t.entry - t.stop) : 0;
         return a + Math.max(risk, 0) * (t.qty||0); }, 0),
-      deployed: open.reduce(function(a,t){ return a + (t.entry||0) * (t.qty||0); }, 0)
+      deployed: open.reduce(function(a,t){ return a + (t.entry||0) * (t.qty||0); }, 0),
+      slip: (function(){
+        var v = closed.concat(open).map(slippageR)
+                      .filter(function(x){ return x != null; });
+        if(!v.length) return null;
+        var mean = v.reduce(function(a,b){ return a+b; }, 0) / v.length;
+        var rupees = closed.concat(open).filter(function(t){
+          return t.signal != null && t.entry != null; })
+          .reduce(function(a,t){ return a + (t.entry - t.signal) * (t.qty||0); }, 0);
+        return {n:v.length, meanR:mean, rupees:rupees};
+      })(),
+      dd: drawdown(closed),
+      // Four open positions in one sector is one trade at four times the
+      // size. The desk sizes each trade correctly and is blind to the book.
+      bySector: (function(){
+        var g = {};
+        open.forEach(function(t){
+          var sec = sectorOf(t.symbol) || 'Unclassified';
+          var risk = (t.entry != null && t.stop != null) ? (t.entry - t.stop) : 0;
+          var e = g[sec] || (g[sec] = {sector:sec, n:0, risk:0, names:[]});
+          e.n++; e.risk += Math.max(risk, 0) * (t.qty||0); e.names.push(t.symbol);
+        });
+        return Object.keys(g).map(function(k){ return g[k]; })
+                 .sort(function(a,b){ return b.risk - a.risk; });
+      })()
     };
   }
 
@@ -2326,16 +2535,76 @@ footer b{color:var(--muted); font-weight:600}
             money0(m.avgWin)+' win against your average '+money0(m.avgLoss)+' loss.'+
             (m.closed.length < 20 ? ' Fewer than 20 trades — treat this as a hint, not a verdict.' : '')});
     }
+    // Slippage: measured, not assumed. Until there are trades with a signal
+    // price recorded, say so rather than showing a confident zero.
+    if(m.slip && m.slip.n >= 3){
+      var sr = m.slip.meanR;
+      cards.push({k:'Slippage', cls:(sr > 0.1 ? 'down' : ''),
+        v:(sr >= 0 ? '+' : '\u2212') + Math.abs(sr).toFixed(2) + 'R',
+        sub:'you paid ' + money0(Math.abs(m.slip.rupees)) +
+            (m.slip.rupees >= 0 ? ' more' : ' less') + ' than the signal price across ' +
+            m.slip.n + ' trades. The backtest assumes you fill at the signal; ' +
+            'this is the gap.'});
+    }
+    if(m.closed.length >= 3){
+      var dd = m.dd;
+      var brake = dd.streak >= 4 || (m.net < 0 && dd.depth > 0 &&
+                   dd.depth >= (data && data.settings ? data.settings.totalRisk : 100000) * 0.1);
+      cards.push({k:'Drawdown', cls:(brake ? 'down' : ''),
+        v:money0(dd.depth),
+        sub:'deepest fall from your own best. Longest losing run ' +
+            dd.worstStreak + (dd.streak ? '; currently on ' + dd.streak : '') +
+            (brake ? ' \u2014 stop and review before the next one.' : '.')});
+    }
     $('dashStats').innerHTML = cards.map(function(c){
       return '<div class="stat'+(c.wide?' wide':'')+'"><div class="k">'+esc(c.k)+'</div>'+
         '<div class="v '+(c.cls||'')+'">'+esc(c.v)+'</div>'+
         (c.sub?'<div class="sub">'+esc(c.sub)+'</div>':'')+'</div>';
     }).join('');
 
+    renderBook(m);
     renderSuggest();
     renderTradeForm();
     renderTradeList(m);
     renderWeekly(m);
+  }
+
+  // Risk across the BOOK, not per trade. The desk sizes every position to the
+  // same rupee risk, which is correct and incomplete: four positions in one
+  // sector move together, so the real exposure is concentrated even though
+  // each line looks identical.
+  function renderBook(m){
+    var box = $('bookRisk');
+    if(!box) return;
+    if(!m.open.length){ box.innerHTML = ''; return; }
+    var cap = (data && data.settings && data.settings.totalRisk) || 100000;
+    var top = m.bySector[0];
+    var share = top ? (m.openRisk > 0 ? top.risk / m.openRisk * 100 : 0) : 0;
+    var heavy = top && (top.n >= 3 || share >= 60);
+    box.innerHTML =
+      '<div class="tradebox"><div class="tradehead">'+
+        '<span class="eyebrow">Risk across the book</span>'+
+        '<span class="formula">'+m.open.length+' open \u00b7 '+
+          money0(m.openRisk)+' at risk of '+money0(cap)+'</span></div>'+
+      '<div class="bookrows">'+
+        m.bySector.map(function(g){
+          var pct = m.openRisk > 0 ? g.risk / m.openRisk * 100 : 0;
+          return '<div class="bookrow'+(g === top && heavy ? ' heavy' : '')+'">'+
+            '<span class="bs">'+esc(g.sector)+'</span>'+
+            '<span class="bn">'+g.n+' position'+(g.n===1?'':'s')+'</span>'+
+            '<span class="bm">'+esc(g.names.join(', '))+'</span>'+
+            '<span class="bp">'+money0(g.risk)+'<i>'+pct.toFixed(0)+'%</i></span>'+
+          '</div>';
+        }).join('')+
+      '</div>'+
+      (heavy
+        ? '<p class="bt-note warn"><b>'+esc(top.sector)+'</b> carries '+
+          share.toFixed(0)+'% of your open risk across '+top.n+' position'+
+          (top.n===1?'':'s')+'. Positions in one sector move together, so that '+
+          'is closer to one trade at '+top.n+'\u00d7 size than to '+top.n+
+          ' independent trades.</p>'
+        : '')+
+      '</div>';
   }
 
   function renderSuggest(){
@@ -2362,7 +2631,7 @@ footer b{color:var(--muted); font-weight:600}
     var box = $('tradeForm');
     if(!editing){ box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
-    var t = (editing === 'new') ? {symbol:'', entry:'', qty:'', stop:'', target:'', date:today(), note:''}
+    var t = (editing === 'new') ? {symbol:'', entry:'', signal:'', qty:'', stop:'', target:'', date:today(), note:''}
                                 : (trades.filter(function(x){ return x.id === editing; })[0] || {});
     var isNew = editing === 'new';
     function f(name, label, type, val, extra){
@@ -2372,7 +2641,9 @@ footer b{color:var(--muted); font-weight:600}
     box.innerHTML = '<div class="tform">'+
       f('symbol','Symbol','text', t.symbol, 'list="symList" placeholder="e.g. BHARTIARTL" autocomplete="off"')+
       f('date','Bought on','date', t.date)+
-      f('entry','Entry ₹','number', t.entry, 'step="0.05" min="0"')+
+      f('entry','Entry ₹ (your fill)','number', t.entry, 'step="0.05" min="0"')+
+      f('signal','Signal ₹ (what the desk said)','number', t.signal,
+        'step="0.05" min="0" placeholder="optional"')+
       f('qty','Quantity','number', t.qty, 'step="1" min="1"')+
       f('stop','Stop ₹','number', t.stop, 'step="0.05" min="0"')+
       f('target','Target ₹','number', t.target, 'step="0.05" min="0"')+
@@ -2482,7 +2753,8 @@ footer b{color:var(--muted); font-weight:600}
       if(!sym){ $('tf_fill').textContent = 'A symbol is needed.'; return; }
       var rec = {
         symbol:sym, date:($('tf_date')||{}).value || today(),
-        entry:num('tf_entry'), qty:Math.round(num('tf_qty')||0),
+        entry:num('tf_entry'), signal:num('tf_signal'),
+        qty:Math.round(num('tf_qty')||0),
         stop:num('tf_stop'), target:num('tf_target'),
         note:(($('tf_note')||{}).value || '')
       };

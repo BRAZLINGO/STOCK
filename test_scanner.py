@@ -4,6 +4,7 @@ Run:  python test_scanner.py
 No network needed -- it builds synthetic price series with known answers.
 """
 import numpy as np
+import pytest
 import pandas as pd
 
 import scanner as S
@@ -73,10 +74,20 @@ def bullish_divergence_series():
     return np.array(seq, dtype=float)
 
 
-def test_divergence_detected():
-    close = bullish_divergence_series()
-    df = frame(close)
-    out = S.analyse("TEST", "Test Co", META, df)
+@pytest.fixture(scope="module")
+def divergence_scan():
+    """One analysed stock with a known divergence, shared by the tests below.
+
+    This used to be a test that RETURNED its result, with another test calling
+    it to get the value. pytest warns about that for good reason: a returning
+    test looks like it is asserting something when it may not be, and the
+    dependency between the two is invisible to the runner.
+    """
+    return S.analyse("TEST", "Test Co", META, frame(bullish_divergence_series()))
+
+
+def test_divergence_detected(divergence_scan):
+    out = divergence_scan
     assert out["divergence"] is True, f"divergence should be detected, got {out}"
     m = out["marks"]
     assert m["lowB"] < m["lowA"], f"bottom B must be lower: {m}"
@@ -86,7 +97,6 @@ def test_divergence_detected():
     print(f"  divergence: price {m['lowA']} -> {m['lowB']} (lower), "
           f"RSI {m['rsiA']} -> {m['rsiB']} (higher), resistance {out['resistance']}")
     print(f"  status={out['status']} stop={out['stop']} qty={out['qty']}")
-    return out
 
 
 def test_no_divergence_on_clean_downtrend():
@@ -96,8 +106,8 @@ def test_no_divergence_on_clean_downtrend():
     print(f"  clean downtrend -> divergence={out['divergence']}, status={out['status']}")
 
 
-def test_sizing_math():
-    out = test_divergence_detected()
+def test_sizing_math(divergence_scan):
+    out = divergence_scan
     rpt = S.TOTAL_RISK / S.RPT_DIVISOR
     expected_risk = round(out["atr"] * S.ATR_MULT, 2)
     assert abs(out["riskPerShare"] - expected_risk) < 0.02, "risk per share = ATR x mult"
@@ -170,12 +180,21 @@ def test_relative_strength_without_benchmark():
     print("  missing benchmark handled")
 
 
-def ohlc(rows):
-    """rows = list of (open, high, low, close)."""
+def ohlc(rows, volume=None):
+    """rows = list of (open, high, low, close).
+
+    `volume` matters now. Both candlestick patterns gained volume rules, and a
+    flat volume series passes every one of them trivially -- so these tests
+    were green while testing nothing about the new behaviour. Pass a real
+    series to exercise the rule, or leave it flat where volume is not the
+    point of the test.
+    """
     a = np.array(rows, dtype=float)
     idx = pd.bdate_range("2025-01-01", periods=len(a))
+    vol = (np.full(len(a), 1e6) if volume is None
+           else np.asarray(volume, dtype=float))
     return pd.DataFrame({"Open": a[:,0], "High": a[:,1], "Low": a[:,2],
-                         "Close": a[:,3], "Volume": np.full(len(a), 1e6)}, index=idx)
+                         "Close": a[:,3], "Volume": vol}, index=idx)
 
 
 def downtrend_rows(n=40, start=200.0, step=2.0):
@@ -225,6 +244,58 @@ def test_engulfing_goes_stale():
         rows.append((flat, flat + 0.2, flat - 0.2, flat))
     assert not S.find_engulfing(ohlc(rows)), "a stale pattern must not be reported"
     print(f"  engulfing dropped after {S.FRESH_BARS} sessions")
+
+
+def test_engulfing_needs_a_body_worth_noticing():
+    """Engulfing the bar before it is the minimum. A tiny candle swallowing a
+    tinier one is a shrug, not a change of hands."""
+    rows = downtrend_rows()
+    o_prev, c_prev = rows[-1][0], rows[-1][3]
+    # a red bar so small that the "engulfing" green one is smaller than normal
+    rows[-1] = (c_prev + 0.05, c_prev + 0.08, c_prev - 0.02, c_prev)
+    rows.append((c_prev - 0.01, c_prev + 0.10, c_prev - 0.03, c_prev + 0.07))
+    assert not S.find_engulfing(ohlc(rows)), (
+        "a body smaller than this stock's own average must not qualify")
+
+
+def test_engulfing_needs_volume():
+    rows = downtrend_rows()
+    o_prev, c_prev = rows[-1][0], rows[-1][3]
+    rows.append((c_prev - 1.0, o_prev + 4.0, c_prev - 2.0, o_prev + 2.0))
+    quiet = np.full(len(rows), 1e6)
+    quiet[-1] = 3e5                         # the signal bar on a third of normal
+    assert not S.find_engulfing(ohlc(rows, quiet)), (
+        "an engulfing candle on well below average volume must be rejected")
+    loud = np.full(len(rows), 1e6)
+    loud[-1] = 2e6
+    assert S.find_engulfing(ohlc(rows, loud)), (
+        "the same candle on heavy volume must still be found")
+
+
+def test_tweezer_needs_the_second_candle_to_turn_up():
+    """Half the pattern's definition. Two RED candles with equal lows is a
+    stock still falling, and it was being reported as a buy signal."""
+    rows = downtrend_rows()
+    low = rows[-1][2]
+    rows.append((low + 3.0, low + 3.4, low, low + 0.5))       # red, bottoms at low
+    rows.append((low + 3.0, low + 3.2, low + 0.02, low + 0.4))  # red again
+    df = ohlc(rows)
+    atr = float(S.wilder_atr(df).iloc[-1])
+    assert not S.find_tweezer(df, atr), (
+        "two falling candles with equal lows are not a tweezer bottom")
+
+
+def test_tweezer_needs_the_second_day_to_show_up():
+    rows = downtrend_rows()
+    low = rows[-1][2]
+    rows.append((low + 3.0, low + 3.4, low, low + 0.5))
+    rows.append((low + 0.6, low + 4.0, low + 0.02, low + 3.0))
+    thin = np.full(len(rows), 1e6)
+    thin[-1] = 4e5                          # nobody turned up to defend it
+    df = ohlc(rows, thin)
+    atr = float(S.wilder_atr(df).iloc[-1])
+    assert not S.find_tweezer(df, atr), (
+        "the second day must trade about as much as the first")
 
 
 def test_tweezer_detected():
