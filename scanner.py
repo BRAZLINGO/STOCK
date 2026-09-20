@@ -32,6 +32,16 @@ import numpy as np
 import pandas as pd
 import yfinance as yf
 
+try:
+    import delivery
+except Exception as _exc:  # noqa: BLE001
+    # delivery.py is an addition, not a dependency. If it did not get uploaded
+    # alongside this file the scan should still produce a page rather than
+    # dying at the import line with a traceback nobody asked for.
+    delivery = None
+    print(f"delivery.py not available ({_exc}) -- the scan will run without "
+          f"delivery percentages", file=sys.stderr)
+
 from universes import (UNIVERSES as UNIVERSE_CATALOGUE, GROUPS as UNIVERSE_GROUPS,
                        build_watchlist, yahoo_symbol)
 
@@ -101,7 +111,7 @@ SUPPORT_BUFFER_ATR = 0.25   # the stop sits this far BELOW the support level
 # --- setups and levels ------------------------------------------------------
 # Bullish ones are entries. "doubletop" and "hs" are TOPPING patterns: they are
 # carried as warnings on the row and never given an entry, stop or quantity.
-SETUPS       = ["divergence", "engulfing", "tweezer",
+SETUPS       = ["divergence", "flowdiv", "engulfing", "tweezer",
                 "doublebottom", "invhs",
                 # continuation and base patterns
                 "flag", "pennant", "rectangle", "asctriangle", "symtriangle",
@@ -145,7 +155,13 @@ PIVOT_PATTERNS = ("rectangle", "asctriangle", "symtriangle", "desctriangle")
 ROUND_DEDUPE   = 20     # cups are long, so their clusters are wider
 
 # flag and pennant
-FLAG_LENS    = (5, 8, 12, 18, 25)   # candidate lengths of the pause
+# Flags run 5 to 15 bars on a daily chart. Past about twenty the sources
+# agree it is momentum exhaustion rather than a pause, so 25 came out.
+# Five bars is inside the textbook range but below the resolution of the
+# shape test: over five bars the intrabar noise is wider than the channel, so
+# "parallel" and "converging" are decided by the wiggle rather than the trend.
+# That is exactly how a pole with no flag on it got reported as a flag.
+FLAG_LENS    = (8, 11, 15)          # candidate lengths of the pause
 FLAG_POLES   = (5, 10, 16, 24)      # candidate lengths of the run into it
 FLAG_POLE_ATR = 3.5     # how far the pole must travel, in ATR
 FLAG_POLE_EFF = 0.70    # and how much of that range was spent going ONE way.
@@ -153,15 +169,37 @@ FLAG_POLE_EFF = 0.70    # and how much of that range was spent going ONE way.
                         # its own range is already 4-5 ATR wide.
 FLAG_MAX_ATR = 3.5      # the pause itself must be tight, in ATR
 FLAG_MAX_WIDTH = 0.6    # the pause must be smaller than the run
-FLAG_MAX_RETRACE = 0.62 # a flag that gives back most of the pole is a reversal
+FLAG_MAX_RETRACE = 0.50 # a flag gives back at most half the pole. Past that,
+                        # published failure rates jump above 40%.
+FLAG_MIN_RETRACE = 0.12 # ...and it must give back SOMETHING. Without this a
+                        # tight drift at the top of the run qualifies, which
+                        # is a pole with no flag on it.
+FLAG_TOUCH_ATR = 0.30   # how close a bar must come to count as touching a line
+FLAG_MIN_TOUCH = 2      # touches needed on each line before it is a line
+FLAG_SLOPE_TOL = 0.05   # slope allowed against the rule, per bar, in ATR
+FLAG_PARALLEL = 0.60    # a flag's channel stays roughly this parallel
+FLAG_VOL_MAX = 1.20     # the flag must not be LOUDER than the pole. The books
+                        # say volume should fall during a flag; requiring a
+                        # strict fall rejects half of everything on data where
+                        # volume is flat, so the test is for the informative
+                        # case -- a noisy consolidation after a run, which is
+                        # distribution rather than a pause.
 PENNANT_NARROW = 0.70   # a pennant's far end is this much tighter than its near
 
 # rectangle and triangles
 TRI_SPANS    = (20, 35, 55, 80, 120)  # widths searched, tightest first
 TRI_MIN_BARS = 15
-TRI_FLAT_ATR = 0.8      # how equal a "flat" edge's pivots must be, in ATR
+TRI_FLAT_ATR = 1.0      # how equal a "flat" edge's pivots must be, in ATR.
+                        # Measured over a long window the noise alone moves
+                        # the pivots more than 0.8 ATR, so a genuinely flat
+                        # floor stopped reading as flat once the window grew
+                        # wide enough to hold three pivots.
 TRI_SLOPE_ATR = 0.5     # how much a sloping edge must actually slope, in ATR
 TRI_CONVERGE = 0.70     # a symmetrical triangle's far end, against its near end
+TRI_MIN_FLAT = 2        # pivots needed on a flat edge
+TRI_MIN_SLOPE = 3       # ...and on a sloping one: "a series of higher lows"
+                        # means three, not two
+TRI_MAX_APEX = 0.75     # break before three-quarters of the way to the apex
 TRI_BREACH   = 0.35     # how far price may poke through a "flat" edge, in ATR.
                         # This is what separates an edge price respected from
                         # two pivots that happened to land on the same number.
@@ -169,24 +207,60 @@ TRI_MONO     = 0.35     # slack allowed when checking a sloping edge really
                         # slopes the whole way rather than stepping once
 RECT_MIN_BARS = 15
 RECT_MAX_HEIGHT_ATR = 6.0   # your note: "very narrow support & resistance"
+RECT_TREND_BARS = 30    # bars of run-in examined for a prior trend
+RECT_TREND_ATR = 3.0    # how far that run must have travelled, in ATR
 
 # rounding bottom and cup with handle
 ROUND_SPANS  = (60, 110, 180)   # a base is a long, slow thing
+CUP_MAX_SPAN = 180      # A cup runs one to six months. The search window
+                        # reaches back past the left rim to see the approach,
+                        # so this caps the WINDOW, and the cup's own shape is
+                        # constrained by the curve fit and the depth tests
+                        # rather than by a second duration rule.
 ROUND_MIN_BARS = 40
 ROUND_STRIDE = 10       # bars between candidate right-hand edges
 ROUND_MIN_DEPTH_ATR = 3.0
 ROUND_FIT    = 0.55     # R^2 of the parabola fitted through the closes
 ROUND_EDGE   = 0.15     # fraction of the base treated as its right-hand climb
 ROUND_RECOVER = 0.45    # how far back up the right side must have come
-ROUND_RIM_TOL = 0.50    # the two rims must be within this much of the cup's
+ROUND_RIM_TOL = 0.35    # the two rims must be within this much of the cup's
                         # depth of each other -- a cup, not a ski slope
-HANDLE_MIN_BARS = 3
-HANDLE_MAX_BARS = 25
-HANDLE_MAX_DEPTH = 0.45 # a handle may retrace at most this much of the cup
+HANDLE_MIN_BARS = 5     # one to four weeks
+HANDLE_MAX_BARS = 20
+HANDLE_MAX_DEPTH = 0.33 # a handle retraces at most a THIRD of the cup. It was
+                        # 0.45 here, which let a second leg down pass as a
+                        # handle and put the stop far too low.
+
+# candlestick quality. Both of these patterns were being detected on shape
+# alone, which is how a two-bar coincidence ends up on the page as a trade.
+TWEEZER_VOL_MIN = 0.90  # the second day must trade about as much as the first
+ENGULF_LOOKBACK = 10    # bars averaged for "a normal body for this stock"
+ENGULF_BODY_MULT = 1.10 # the engulfing candle must be bigger than that
+ENGULF_VOL_MULT = 1.00  # ...on at least average volume
 
 # volume confirmation
 VOL_LOOKBACK = 20       # bars averaged for "normal" volume
 VOL_CONFIRM_MULT = 1.2  # signal bar must beat the average by this much
+
+# --- delivery percentage (NSE only) -----------------------------------------
+DELIVERY      = True    # set False to skip the NSE delivery download entirely
+DELIVERY_DAYS = 260     # weekdays of history kept. The first run backfills
+                        # this; later runs fetch the one day they are missing.
+DELIV_HIGH    = 65.0    # "high delivery" in absolute terms
+DELIV_SPIKE   = 1.30    # ...or this much above the stock's own 20-day average,
+                        # which is the more useful test: a stock that always
+                        # delivers 70% has not told you anything today
+
+# --- money flow and volume at price -----------------------------------------
+FLOW_MAX_AGE = 30       # a money-flow divergence's bottom must be this recent
+
+# Volume profile. Swing pivots say where price TURNED; this says where it
+# TRADED, which is the better guide to what will stop a move.
+VP_BINS      = 40       # price buckets across the range
+VP_LOOKBACK  = 250      # bars of history in the profile (about a year daily)
+VP_VALUE_AREA = 0.70    # the band holding this share of the volume
+VP_SHELF_SHARE = 0.045  # a single bin holding this much volume is a wall
+VP_THIN      = 0.12     # overhead volume below this share is a clear runway
 
 # --- backtest ---------------------------------------------------------------
 BACKTEST      = True    # set False to skip it and shorten the run
@@ -311,6 +385,28 @@ def wilder_atr(df: pd.DataFrame, period: int = ATR_PERIOD) -> pd.Series:
     return wilder_smooth(tr, period)
 
 
+def ad_line(df: pd.DataFrame) -> pd.Series:
+    """The Accumulation / Distribution line -- OBV with better manners.
+
+    Plain OBV adds a bar's whole volume to the running total if the close was
+    up and subtracts all of it if the close was down, so a bar that opened at
+    its low, ran all day and closed a paisa lower counts as pure distribution.
+    A/D weights each bar by WHERE in its own range the close landed:
+
+        ((close - low) - (high - close)) / (high - low)   x   volume
+
+    +1 when it closes on the high, -1 on the low, 0 in the middle. A rising
+    A/D under a falling price is the thing worth knowing: the price is making
+    lower bottoms while the buying underneath it is getting stronger.
+    """
+    high, low, close = df["High"], df["Low"], df["Close"]
+    if "Volume" not in df.columns:
+        return pd.Series(np.nan, index=df.index)
+    span = (high - low).replace(0, np.nan)
+    clv = (((close - low) - (high - close)) / span).fillna(0.0)
+    return (clv * df["Volume"].astype(float)).cumsum()
+
+
 def pivot_lows(series: pd.Series, k: int = SWING_BARS) -> list:
     """Indices where the value is the lowest in the k bars either side."""
     vals = series.values
@@ -410,13 +506,29 @@ def find_engulfing(df: pd.DataFrame, fresh: int = FRESH_BARS) -> list:
     notes -- "it's high is the position to buy & low must be set as stop loss".
     """
     o, h, l, c = df["Open"], df["High"], df["Low"], df["Close"]
+    v = df["Volume"] if "Volume" in df.columns else None
+    bodies = (c - o).abs()
     n, found = len(df), []
     for i in range(max(1, n - fresh), n):
         prev_red = c.iloc[i - 1] < o.iloc[i - 1]
         green = c.iloc[i] > o.iloc[i]
         swallows = (o.iloc[i] <= c.iloc[i - 1]) and (c.iloc[i] >= o.iloc[i - 1])
         bigger = (c.iloc[i] - o.iloc[i]) > (o.iloc[i - 1] - c.iloc[i - 1])
-        if prev_red and green and swallows and bigger and in_downtrend(c, i - 1):
+        # Engulfing the bar before it is the minimum. What separates a signal
+        # from a shrug is that the candle is big for THIS stock -- a real
+        # change of hands rather than one quiet bar swallowing a quieter one.
+        recent = bodies.iloc[max(0, i - ENGULF_LOOKBACK):i]
+        avg_body = float(recent.mean()) if len(recent) else None
+        stands_out = (avg_body is None or not np.isfinite(avg_body) or avg_body <= 0
+                      or float(bodies.iloc[i]) >= avg_body * ENGULF_BODY_MULT)
+        vol_ok = True
+        if v is not None:
+            win = v.iloc[max(0, i - VOL_LOOKBACK):i]
+            avg_v = float(win.mean()) if len(win) else None
+            if avg_v and np.isfinite(avg_v) and avg_v > 0:
+                vol_ok = float(v.iloc[i]) >= avg_v * ENGULF_VOL_MULT
+        if (prev_red and green and swallows and bigger and stands_out
+                and vol_ok and in_downtrend(c, i - 1)):
             found.append({
                 "type": "engulfing", "label": "Bullish engulfing",
                 "date": df.index[i].strftime("%Y-%m-%d"), "ageBars": n - 1 - i,
@@ -430,22 +542,44 @@ def find_engulfing(df: pd.DataFrame, fresh: int = FRESH_BARS) -> list:
 
 
 def find_tweezer(df: pd.DataFrame, atr: float, fresh: int = FRESH_BARS) -> list:
-    """Two candles bottoming at the same level after a downtrend."""
-    l, h, c = df["Low"], df["High"], df["Close"]
+    """Two candles bottoming at the same level, the second one turning up.
+
+    Half this pattern's definition was missing. "Two equal lows" alone is not
+    a tweezer bottom -- the FIRST candle has to be the falling one and the
+    SECOND has to close up, because the whole story is "sellers hit the same
+    floor twice and the second time buyers took it back". Two red candles
+    with equal lows is a stock still going down, and the scan was reporting
+    those as buy signals. It is the worst performer on your own data at
+    29.7%, and this is a large part of why.
+
+    Volume matters too: the second day should trade at least as much as the
+    first, or nobody actually turned up to defend the level.
+    """
+    o, l, h, c = df["Open"], df["Low"], df["High"], df["Close"]
+    v = df["Volume"] if "Volume" in df.columns else None
     n, found = len(df), []
     last = float(c.iloc[-1])
     tol = (atr if atr and np.isfinite(atr) else last * 0.002) * TWEEZER_TOL_ATR
     for i in range(max(1, n - fresh), n):
         matched = abs(float(l.iloc[i]) - float(l.iloc[i - 1])) <= tol
-        if matched and in_downtrend(c, i - 1):
+        first_falls = float(c.iloc[i - 1]) < float(o.iloc[i - 1])
+        second_turns = float(c.iloc[i]) > float(o.iloc[i])
+        vol_ok = True
+        if v is not None:
+            v1, v2 = float(v.iloc[i - 1]), float(v.iloc[i])
+            if np.isfinite(v1) and np.isfinite(v2) and v1 > 0:
+                vol_ok = v2 >= v1 * TWEEZER_VOL_MIN
+        if (matched and first_falls and second_turns and vol_ok
+                and in_downtrend(c, i - 1)):
             shared = round(min(float(l.iloc[i]), float(l.iloc[i - 1])), 2)
             found.append({
                 "type": "tweezer", "label": "Tweezer bottom",
                 "date": df.index[i].strftime("%Y-%m-%d"), "ageBars": n - 1 - i,
                 "entry": round(float(h.iloc[i]), 2),
                 "stop": shared,
-                "detail": (f"Two sessions bottomed together at {shared} "
-                           f"after a downtrend."),
+                "detail": (f"Two sessions bottomed together at {shared} after "
+                           f"a downtrend; the first closed down, the second "
+                           f"closed up."),
             })
     return found
 
@@ -600,11 +734,49 @@ def _shoulders(pivots: list, values, unit: float, invert: bool):
     return None
 
 
+def _neckline(high: pd.Series, a: int, b: int, c: int, invert: bool) -> float:
+    """The neckline of a head-and-shoulders, drawn the way the books draw it.
+
+    It joins the two REACTION points -- the peak between the left shoulder and
+    the head, and the peak between the head and the right shoulder -- and the
+    entry is where that line sits at the right shoulder.
+
+    This code used to take the highest high across the whole formation
+    instead. On a tidy pattern the two are the same number. On a real one,
+    where some unrelated spike sits inside the window, the "neckline" came out
+    far above the line anyone would draw, which pushed the entry up, shrank
+    the reward and made the measured move too big. The desk's best-performing
+    pattern was being measured against the wrong level.
+    """
+    pick = (lambda seg: float(seg.max())) if invert else (lambda seg: float(seg.min()))
+    left = high.iloc[a:b + 1]
+    right = high.iloc[b:c + 1]
+    if not len(left) or not len(right):
+        return None
+    p1, v1 = int(np.argmax(left.values) if invert else np.argmin(left.values)), pick(left)
+    p2, v2 = int(np.argmax(right.values) if invert else np.argmin(right.values)), pick(right)
+    x1, x2 = a + p1, b + p2
+    if x2 == x1:
+        return v2
+    # Necklines slope. Project the line joining the two reaction points
+    # forward to the right shoulder, which is where the break happens.
+    slope = (v2 - v1) / (x2 - x1)
+    projected = v2 + slope * (c - x2)
+    # A steeply sloping neckline, projected far enough, lands BELOW both of
+    # the points that defined it -- and an entry under the pattern's own
+    # rallies is not a breakout level, it is a price already passed. Clamp it
+    # inside the two reaction points.
+    lo_v, hi_v = (v1, v2) if v1 <= v2 else (v2, v1)
+    if invert:
+        return float(min(max(projected, lo_v), hi_v * 1.10))
+    return float(max(min(projected, hi_v), lo_v * 0.90))
+
+
 def find_inverse_hs(df: pd.DataFrame, atr: float) -> list:
     """Inverse head and shoulders -- three lows, the middle one deepest.
 
-    The bullish one. Neckline is the highest point between the shoulders; the
-    target is the neckline plus the drop from neckline to head.
+    The bullish one. The neckline joins the two rallies either side of the
+    head, and the target is the neckline plus the drop from neckline to head.
     """
     low, high, close = df["Low"], df["High"], df["Close"]
     n = len(df)
@@ -621,7 +793,9 @@ def find_inverse_hs(df: pd.DataFrame, atr: float) -> list:
     ls, head, rs = hit
     if n - 1 - rs > HS_MAX_AGE:
         return []
-    neck = float(high.iloc[ls:rs + 1].max())
+    neck = _neckline(high, ls, head, rs, invert=True)
+    if neck is None:
+        return []
     depth = neck - float(low.iloc[head])
     if depth <= 0 or last_price > neck + depth * DBL_LATE_FRAC:
         return []
@@ -659,7 +833,11 @@ def find_head_shoulders(df: pd.DataFrame, atr: float) -> list:
     ls, head, rs = hit
     if n - 1 - rs > HS_MAX_AGE:
         return []
-    neck = float(low.iloc[ls:rs + 1].min())
+    # Same correction as the bullish one: the neckline joins the two reaction
+    # LOWS either side of the head, not the lowest point in the window.
+    neck = _neckline(df["Low"], ls, head, rs, invert=False)
+    if neck is None:
+        neck = float(low.iloc[ls:rs + 1].min())
     return [{
         "type": "hs", "label": "Head & shoulders",
         "direction": "warn",
@@ -725,51 +903,121 @@ def _space_out(hits: list, gap: int) -> list:
 
 
 # --- flags and pennants -----------------------------------------------------
+def _hull_line(ys: np.ndarray, upper: bool, tol: float,
+               min_sep: int = 2) -> tuple:
+    """The trendline along a run of highs (or lows). Returns (slope, b, touches).
+
+    Two wrong answers came before this one, and both are worth naming because
+    they look right until you test them.
+
+      1. Least-squares, then slide the line up until it sits above every high.
+         That envelope touches exactly ONE point by construction, so a
+         "two touches" rule can never pass.
+      2. A line through the two HIGHEST points. In a falling channel the two
+         highest highs are both early, so the line drops too steeply and later
+         highs poke out above it -- it contains nothing.
+
+    The right construction is the one a person performs with a ruler: lay the
+    edge across the top and rotate it until it cannot go lower without cutting
+    through a bar. That is the upper convex hull, and every edge of it has all
+    the points below it by definition. Take the edge that spans the most bars,
+    because that is the line describing the whole pause rather than two
+    neighbours.
+    """
+    n = len(ys)
+    if n < 3:
+        return None, None, 0
+    pts = [(float(i), float(ys[i])) for i in range(n)]
+
+    def cross(o, a, b):
+        return ((a[0] - o[0]) * (b[1] - o[1]) -
+                (a[1] - o[1]) * (b[0] - o[0]))
+
+    hull = []
+    for p in pts:
+        # upper hull keeps clockwise turns, lower hull counter-clockwise
+        while len(hull) >= 2 and (cross(hull[-2], hull[-1], p) >= 0 if upper
+                                  else cross(hull[-2], hull[-1], p) <= 0):
+            hull.pop()
+        hull.append(p)
+    if len(hull) < 2:
+        return None, None, 0
+
+    # Which hull edge is THE trendline? Not simply the longest one: with a
+    # handful of bars the longest edge runs from the first point to the last,
+    # so its slope is decided by two noisy endpoints and the shape in between
+    # is ignored. That produced channels that appeared to converge when the
+    # drawing was parallel. Take the edge the price RESPECTED most -- the one
+    # with the most bars sitting on it -- and use span only to break ties.
+    xs = np.arange(n, dtype=float)
+    best = None
+    for a, b in zip(hull, hull[1:]):
+        span = b[0] - a[0]
+        if span < min_sep:
+            continue
+        slope = (b[1] - a[1]) / span
+        intercept = a[1] - slope * a[0]
+        touches = int(np.sum(np.abs(ys - (slope * xs + intercept)) <= tol))
+        key = (touches, span)
+        if best is None or key > best[0]:
+            best = (key, slope, intercept, touches)
+    if best is None:
+        return None, None, 0
+    _, slope, intercept, touches = best
+    return float(slope), float(intercept), int(touches)
+
+
 def scan_flags(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
-    """A sharp run (the pole), then a tight pause that leans against it.
+    """A sharp run (the pole), then a real pause that leans against it.
 
-    Vectorised across window lengths instead of looped bar by bar: five flag
-    lengths by four pole lengths is twenty numpy passes over the series, where
-    the obvious nested loop would be a million Python comparisons per stock.
+    Your note number 3 for this pattern says: "join a line with the points of
+    lows & second on the point of highs". That is what this does now. The
+    first version measured the pause as a BOX -- the highest high and lowest
+    low of the last few bars -- and a box has no slope, no touches and no
+    shape. Two consequences, both of which you saw on the live page:
 
-    Your rule, kept exactly: entry on the break of the flag, stop at the low of
-    the flag. The measured move (pole height projected off the breakout) is
-    offered as the target, and `attach_reward` caps it at the first real
-    resistance above -- because a wall in the way beats a formula.
+      * a stock that ran hard and then drifted UP quietly for five bars
+        qualified, because the box was tight and the old code allowed the
+        flag's high to sit above the pole's top. That is a pole with no flag.
+      * there was no requirement that price ever pulled back at all.
+
+    So the rules here are the ones the textbooks actually give:
+
+      pole      a sharp directional run, most of its range spent going one way
+      flag      5 to 15 bars (past ~20 it is exhaustion, not a pause)
+      shape     two lines, roughly parallel, sloping DOWN or sideways, each
+                touched at least twice
+      depth     retraces at most half the pole, and at least a little -- a
+                pause that does not pause is not a flag
+      ceiling   never makes a new high above the pole
+      volume    quieter in the flag than in the pole
+      entry     a CLOSE above the flag, not a wick through it
+      stop      the flag's low, exactly as your notes say
+      target    the pole's height projected from the breakout
+
+    Two stages for speed: a cheap vectorised pre-filter over rolling windows,
+    then the line fitting only on the handful of bars that survive it.
     """
     n = len(df)
     if n < 40:
         return []
     high, low, close = df["High"], df["Low"], df["Close"]
-    cv = close.to_numpy(float)
+    hv, lv, cv = (high.to_numpy(float), low.to_numpy(float), close.to_numpy(float))
+    vol = df["Volume"].to_numpy(float) if "Volume" in df.columns else None
     unit = _unit_array(cv, atr)
     found = []
 
     for L in FLAG_LENS:
         if L + max(FLAG_POLES) + 2 >= n:
             continue
-        # The window ENDS on bar i and includes it. That matters: with the flag
-        # measured only up to yesterday, a bar that breaks the flag low today
-        # still gets reported as an intact flag with a stop above the price.
         fh = high.rolling(L).max().to_numpy(float)              # flag high
         fl = low.rolling(L).min().to_numpy(float)               # flag low
-        half = max(2, L // 2)
-        first_h = high.shift(L - half).rolling(half).max().to_numpy(float)
-        first_l = low.shift(L - half).rolling(half).min().to_numpy(float)
-        last_h = high.rolling(half).max().to_numpy(float)
-        last_l = low.rolling(half).min().to_numpy(float)
 
         for P in FLAG_POLES:
             pt = high.shift(L).rolling(P).max().to_numpy(float)       # pole top
             pb = low.shift(L).rolling(P).min().to_numpy(float)        # pole base
             pole_h = pt - pb
             flag_h = fh - fl
-
-            # The pole has to be a RUN, not just a wide patch. Over 24 bars a
-            # random walk's high-to-low range is already four or five ATR, so
-            # "range >= 3 ATR" is a test almost anything passes. What separates
-            # a real pole is that the range was spent going one way: net
-            # close-to-close gain, and most of the range accounted for by it.
             net = (close.shift(L) - close.shift(L + P - 1)).to_numpy(float)
 
             ok = (np.isfinite(fh) & np.isfinite(fl) & np.isfinite(net) &
@@ -778,37 +1026,91 @@ def scan_flags(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
             ok &= net >= unit * FLAG_POLE_ATR      # and it has to be UPWARD
             ok &= net >= pole_h * FLAG_POLE_EFF    # spent going one way
             ok &= flag_h > 0
-            ok &= flag_h <= unit * FLAG_MAX_ATR    # the pause is genuinely tight
-            ok &= flag_h <= pole_h * FLAG_MAX_WIDTH   # the pause is the smaller thing
-            # A flag holds most of the pole. One that gives the whole move back
-            # is a reversal wearing a flag's clothes.
-            ok &= fl >= pb + pole_h * (1.0 - FLAG_MAX_RETRACE)
-            ok &= fh <= pt + unit * 0.5            # a pause, not already a new leg
-
-            narrowing = ((last_h - last_l) <= (first_h - first_l) * PENNANT_NARROW)
-            converging = narrowing & (last_h < first_h) & (last_l > first_l)
-            drifting = (last_h <= first_h + unit * 0.25)   # flat-to-down highs
+            # Only the RELATIVE width test survives here. An absolute "the
+            # pause must be under N ATR wide" cap was mine, not the textbooks',
+            # and it rejects every honest pennant, which starts wide and
+            # narrows -- the width at the start is the whole point.
+            ok &= flag_h <= pole_h * FLAG_MAX_WIDTH
+            # Retraces at most half the pole...
+            ok &= fl >= pt - pole_h * FLAG_MAX_RETRACE
+            # ...and at least a little. THIS is the test that was missing: a
+            # "flag" that never gave anything back is the top of the pole.
+            ok &= fl <= pt - pole_h * FLAG_MIN_RETRACE
+            # A flag does not make new highs. The old code allowed half an ATR
+            # above the pole, which let a continuing run pass as a pause.
+            ok &= fh <= pt
 
             if since:
                 ok[:since] = False
             for i in np.flatnonzero(ok):
-                if converging[i]:
+                a = i - L + 1
+                if a < 1:
+                    continue
+                xs = np.arange(L, dtype=float)
+                his, los = hv[a:i + 1], lv[a:i + 1]
+                if not (np.isfinite(his).all() and np.isfinite(los).all()):
+                    continue
+                u = unit[i]
+                tol = u * FLAG_TOUCH_ATR
+                s_hi, b_hi, t_hi = _hull_line(his, True, tol)
+                s_lo, b_lo, t_lo = _hull_line(los, False, tol)
+                if s_hi is None or s_lo is None:
+                    continue
+
+                # Each line has to have been touched at least twice, or it is
+                # not a line anybody drew -- it is a boundary round noise.
+                top_line = s_hi * xs + b_hi
+                bot_line = s_lo * xs + b_lo
+                if t_hi < FLAG_MIN_TOUCH or t_lo < FLAG_MIN_TOUCH:
+                    continue
+
+                w_start = float(top_line[0] - bot_line[0])
+                w_end = float(top_line[-1] - bot_line[-1])
+                if w_start <= 0 or w_end <= 0:
+                    continue
+                if vol is not None:
+                    fvol = float(np.nanmean(vol[a:i + 1]))
+                    pvol = float(np.nanmean(vol[max(0, a - P):a]))
+                    if (np.isfinite(fvol) and np.isfinite(pvol) and pvol > 0
+                            and fvol > pvol * FLAG_VOL_MAX):
+                        continue          # louder than the pole: not a pause
+
+                # Classify FIRST, then apply that shape's slope rule. The two
+                # shapes want opposite things from the lower line -- a flag
+                # leans down against the trend, a pennant's lows RISE into the
+                # apex -- so a single "no rising lows" test before the
+                # classification threw every honest pennant away.
+                slack = u * FLAG_SLOPE_TOL
+                # Convergence is a RELATIVE property: the two lines approach
+                # each other. Demanding that the upper line also fall in
+                # absolute terms threw away honest pennants whose roof was
+                # merely flat, which is most of them on a short window.
+                converging = (w_end <= w_start * PENNANT_NARROW and
+                              (s_lo - s_hi) >= slack)
+                parallel = (w_end >= w_start * FLAG_PARALLEL and
+                            s_hi <= slack and s_lo <= slack)
+                if converging:
                     kind, label = "pennant", "Pennant"
-                elif drifting[i]:
+                elif parallel:
                     kind, label = "flag", "Bullish flag"
                 else:
-                    continue
+                    continue              # neither parallel nor converging
+
                 found.append({
                     "type": kind, "label": label, "i": int(i),
                     "entry": round(float(fh[i]), 2),
                     "stop": round(float(fl[i]), 2),
                     "measured": round(float(fh[i] + pole_h[i]), 2),
-                    "quality": float(pole_h[i] / unit[i]),
-                    "detail": (f"Pole {round(float(pb[i]), 2)} → "
+                    "quality": float(L * 100 + pole_h[i] / u),
+                    "detail": (f"Pole {round(float(pb[i]), 2)} \u2192 "
                                f"{round(float(pt[i]), 2)} over {P} bars, then a "
                                f"{L}-bar {'pennant' if kind == 'pennant' else 'flag'} "
-                               f"between {round(float(fl[i]), 2)} and "
-                               f"{round(float(fh[i]), 2)}."),
+                               f"between two lines "
+                               f"({round(float(bot_line[-1]), 2)}\u2013"
+                               f"{round(float(top_line[-1]), 2)} today), "
+                               f"giving back "
+                               f"{round(float((pt[i] - fl[i]) / pole_h[i]) * 100)}% "
+                               f"of the run."),
                 })
 
     # Several (flag length, pole length) pairs describe the same pause, and a
@@ -876,26 +1178,38 @@ def scan_boxes(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
                 continue
             hs = _edge(phighs, hv, lo, r)
             ls = _edge(plows, lv, lo, r)
-            if len(hs) < 2 or len(ls) < 2:
+            # Two pivots make a line; three make a pattern. The sources are
+            # consistent that a triangle needs at least three higher lows (or
+            # three lower highs) on its sloping edge -- with two, "a series of
+            # higher lows" is just a swing.
+            if len(hs) < TRI_MIN_FLAT or len(ls) < TRI_MIN_FLAT:
                 continue
 
             top_vals = [v for _, v in hs]
             bot_vals = [v for _, v in ls]
+            # A flat edge is defined by the pivots AT that level, not by every
+            # swing in the window. Over a long window a sine-ish chart throws
+            # up intermediate swing points well away from the floor, and
+            # judging flatness across all of them made a perfectly flat floor
+            # read as an 8-rupee spread.
+            flat_tol0 = unit[r] * TRI_FLAT_ATR
+            roof_hits = [v for v in top_vals if v >= max(top_vals) - flat_tol0]
+            floor_hits = [v for v in bot_vals if v <= min(bot_vals) + flat_tol0]
             band = max(top_vals) - min(bot_vals)
             if band <= 0:
                 continue
 
             flat_tol = u * TRI_FLAT_ATR
             slope_min = u * TRI_SLOPE_ATR
-            top_flat = (max(top_vals) - min(top_vals)) <= flat_tol
-            bot_flat = (max(bot_vals) - min(bot_vals)) <= flat_tol
+            top_flat = len(roof_hits) >= TRI_MIN_FLAT
+            bot_flat = len(floor_hits) >= TRI_MIN_FLAT
             top_drop = top_vals[0] - top_vals[-1]      # falling highs when > 0
             bot_rise = bot_vals[-1] - bot_vals[0]      # rising lows when > 0
             top_falls = top_drop >= slope_min
             bot_rises = bot_rise >= slope_min
 
-            roof = float(np.mean(top_vals)) if top_flat else max(top_vals)
-            floor_ = float(np.mean(bot_vals)) if bot_flat else min(bot_vals)
+            roof = float(np.mean(roof_hits)) if top_flat else max(top_vals)
+            floor_ = float(np.mean(floor_hits)) if bot_flat else min(bot_vals)
             height = max(top_vals) - min(bot_vals)
             last_bar = r
 
@@ -903,10 +1217,23 @@ def scan_boxes(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
             # a much wider range is a coincidence, not an edge. A flat edge is
             # only flat if price actually respected it: nothing of consequence
             # traded through it across the whole span.
-            span_hi = float(hv[lo:r + 1].max())
-            span_lo = float(lv[lo:r + 1].min())
-            roof_holds = span_hi <= roof + u * TRI_BREACH
-            floor_holds = span_lo >= floor_ - u * TRI_BREACH
+            # Containment, measured on CLOSES. Against highs this test became
+            # nearly free once the roof was defined as the average of the
+            # highest pivots -- the roof is built from the high, so the high
+            # respects it by construction. What actually matters is that price
+            # never CLOSED beyond the level while the pattern was forming: a
+            # close above the roof means it already broke out, and whatever is
+            # left is not the pattern any more.
+            # BOTH tests, not either. Highs alone became weak once the roof
+            # was built from the highest pivots (the roof then respects itself
+            # by construction); closes alone are weaker still, because a close
+            # always sits inside its own bar. Together they say what is meant:
+            # nothing traded meaningfully through the level, and nothing
+            # closed through it either.
+            roof_holds = (float(hv[lo:r + 1].max()) <= roof + u * TRI_BREACH and
+                          float(cv[lo:r + 1].max()) <= roof + u * TRI_BREACH * 0.5)
+            floor_holds = (float(lv[lo:r + 1].min()) >= floor_ - u * TRI_BREACH and
+                           float(cv[lo:r + 1].min()) >= floor_ - u * TRI_BREACH * 0.5)
             # A sloping edge should slope the whole way, not jump once and sit.
             tops_fall = all(top_vals[k] >= top_vals[k + 1] - u * TRI_MONO
                             for k in range(len(top_vals) - 1))
@@ -918,14 +1245,27 @@ def scan_boxes(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
                 # A box is only a box if it is NARROW -- your note: "stuck in
                 # very narrow support & resistance compared to the sideways
                 # trend". A wide drifting range is just a range.
-                if band <= u * RECT_MAX_HEIGHT_ATR and span >= RECT_MIN_BARS:
+                # And a rectangle is a PAUSE IN SOMETHING. Every source opens
+                # with "a prior trend should exist", and your own note says the
+                # same: a downtrend before the pattern, or an uptrend in the
+                # case of a reversal. Without that test a random walk's
+                # ordinary quiet patches all qualify, which is what was
+                # happening: one every seventy bars of pure noise.
+                back = max(0, lo - RECT_TREND_BARS)
+                run = (float(cv[lo]) - float(cv[back])) if lo > back else 0.0
+                if (band <= u * RECT_MAX_HEIGHT_ATR and span >= RECT_MIN_BARS
+                        and abs(run) >= u * RECT_TREND_ATR):
                     kind, label = "rectangle", "Rectangle"
                     entry, stop = roof, floor_
                     measured = roof + band
                     detail = (f"Box between {round(floor_, 2)} and "
                               f"{round(roof, 2)} for {span} bars "
-                              f"({len(hs)} touches on top, {len(ls)} below).")
-            elif top_flat and roof_holds and bot_rises and bots_rise:
+                              f"({len(roof_hits)} touches on top, "
+                              f"{len(floor_hits)} below), after a "
+                              f"{'rise' if run > 0 else 'fall'} of "
+                              f"{abs(round(run, 2))}.")
+            elif (top_flat and roof_holds and bot_rises and bots_rise
+                  and len(ls) >= TRI_MIN_SLOPE):
                 kind, label = "asctriangle", "Ascending triangle"
                 entry = roof
                 stop = min(bot_vals[-1], bot_vals[-2]) - u * 0.25
@@ -936,17 +1276,35 @@ def scan_boxes(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
                 detail = (f"Flat top at {round(roof, 2)} with "
                           f"{len(hs)} touches, lows rising "
                           f"{round(bot_vals[0], 2)} → {round(bot_vals[-1], 2)}.")
-            elif bot_flat and floor_holds and top_falls and tops_fall:
+            elif (bot_flat and floor_holds and top_falls and tops_fall
+                  and len(hs) >= TRI_MIN_SLOPE):
                 kind, label = "desctriangle", "Descending triangle"
                 entry = stop = measured = None      # bearish: a warning, never a buy
                 detail = (f"Flat floor at {round(floor_, 2)} with "
                           f"{len(ls)} touches, highs falling "
                           f"{round(top_vals[0], 2)} → {round(top_vals[-1], 2)}.")
-            elif top_falls and bot_rises and tops_fall and bots_rise:
+            # A symmetrical triangle's own rule is four pivots -- two highs
+            # and two lows. The "three or more" requirement belongs to the
+            # ascending and descending ones, whose sloping edge is described
+            # as "a series of higher lows". Applying three everywhere was me
+            # over-generalising one source onto another pattern.
+            elif (top_falls and bot_rises and tops_fall and bots_rise
+                  and len(hs) >= TRI_MIN_FLAT and len(ls) >= TRI_MIN_FLAT):
                 near = top_vals[0] - bot_vals[0]
                 far = top_vals[-1] - bot_vals[-1]
                 if near <= 0 or far > near * TRI_CONVERGE:
                     continue                        # not actually converging
+                # The apex rule. A symmetrical triangle should break somewhere
+                # between half and three-quarters of the way to where its two
+                # lines meet; by the time price is squeezed into the tip the
+                # pattern has spent its tension and the break means little.
+                # Distance to the apex, in bars, from the converging rate:
+                closing = (near - far)
+                if closing > 0:
+                    bars_seen = float(hs[-1][0] - hs[0][0]) or float(span)
+                    to_apex = far / (closing / max(bars_seen, 1.0))
+                    if to_apex > 0 and bars_seen / (bars_seen + to_apex) > TRI_MAX_APEX:
+                        continue                    # already at the tip
                 kind, label = "symtriangle", "Symmetrical triangle"
                 entry = max(top_vals)
                 stop = min(bot_vals[-1], bot_vals[-2]) - u * 0.25
@@ -1046,6 +1404,11 @@ def scan_cups(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
             edge_n = max(3, int(span * ROUND_EDGE))
             left_rim = float(hv[start:start + edge_n].max())
             right_rim = float(hv[end - edge_n:end + 1].max())
+            # How long the CUP ran, rim to rim -- not how wide the window was
+            # that found it. The window reaches back past the left rim to see
+            # the approach, so capping the window at six months quietly capped
+            # the cup at rather less than that.
+            cup_bars = (end - int(np.argmax(hv[start:start + edge_n])) - start)
             if abs(left_rim - right_rim) > depth * ROUND_RIM_TOL:
                 continue
 
@@ -1077,7 +1440,8 @@ def scan_cups(df: pd.DataFrame, atr: np.ndarray, since: int = 0) -> list:
             # handle that has been forming for a fortnight should be reported
             # with a fortnight's low as its stop, not with day four's.
             handle = None
-            for hl in range(HANDLE_MIN_BARS, HANDLE_MAX_BARS + 1):
+            for hl in (range(HANDLE_MIN_BARS, HANDLE_MAX_BARS + 1)
+                       if cup_bars <= CUP_MAX_SPAN else ()):
                 h_end = end + hl
                 if h_end >= n:
                     break
@@ -1196,6 +1560,68 @@ def live_structures(df: pd.DataFrame, atr: np.ndarray = None) -> tuple:
     return entries, warnings
 
 
+def find_flow_divergence(df: pd.DataFrame, atr: float) -> list:
+    """Money-flow divergence: a lower bottom on price, a higher one on A/D.
+
+    The same shape as the RSI divergence this desk was built around, with one
+    difference that matters: RSI is made of price alone, so an RSI divergence
+    says momentum is slowing. A/D is made of price AND volume, so this one says
+    somebody is buying into the fall. On the desk's own backtest RSI
+    divergence barely clears break-even, which is the reason to ask the
+    question with money in it rather than with price twice.
+    """
+    if "Volume" not in df.columns or len(df) < DIV_WINDOW // 2:
+        return []
+    low, high = df["Low"], df["High"]
+    ad = ad_line(df)
+    if not np.isfinite(ad.to_numpy(float)).any():
+        return []
+    n = len(df)
+    start = max(0, n - DIV_WINDOW)
+    lows_idx = [i for i in pivot_lows(low)
+                if i >= start and np.isfinite(float(ad.iloc[i]))]
+    if len(lows_idx) < 2:
+        return []
+
+    b = lows_idx[-1]
+    if n - 1 - b > FLOW_MAX_AGE:
+        return []                       # the bottom is old news
+    lv, av = low.to_numpy(float), ad.to_numpy(float)
+    unit = atr if (atr and np.isfinite(atr) and atr > 0) else float(df["Close"].iloc[-1]) * 0.01
+    for a in reversed(lows_idx[:-1]):
+        if lv[b] >= lv[a]:
+            continue                    # not a lower bottom, keep looking back
+        if av[b] <= av[a]:
+            break                       # lower bottom AND weaker money: no signal
+        span = high.iloc[a:b + 1]
+        if not len(span):
+            break
+        neck = float(span.max())
+        # Scale the two A/D readings by the bigger of them so the number in the
+        # sentence means something on a giant and on a microcap alike.
+        scale = max(abs(av[a]), abs(av[b]), 1.0)
+        gain = (av[b] - av[a]) / scale * 100.0
+        return [{
+            "type": "flowdiv", "label": "Money-flow divergence",
+            "direction": "long",
+            "date": df.index[b].strftime("%Y-%m-%d"),
+            "ageBars": int(n - 1 - b),
+            "entry": round(neck, 2),
+            "stop": round(neck - unit * ATR_MULT, 2),
+            "detail": (f"Price {round(lv[a], 2)} → {round(lv[b], 2)} "
+                       f"(lower bottom) while the A/D line rose "
+                       f"{gain:+.1f}% — buying into the fall."),
+            "marks": {
+                "dateA": df.index[a].strftime("%Y-%m-%d"),
+                "lowA": round(lv[a], 2),
+                "dateB": df.index[b].strftime("%Y-%m-%d"),
+                "lowB": round(lv[b], 2),
+                "flowGain": round(gain, 1),
+            },
+        }]
+    return []
+
+
 def volume_state(df: pd.DataFrame, idx: int) -> dict:
     """Did anyone actually show up for this bar?
 
@@ -1219,6 +1645,159 @@ def volume_state(df: pd.DataFrame, idx: int) -> dict:
         "volumeAvg": round(avg, 0),
         "volumeRatio": round(here / avg, 2),
         "volumeConfirmed": bool(here >= avg * VOL_CONFIRM_MULT),
+    }
+
+
+def volume_profile(df: pd.DataFrame, bins: int = VP_BINS,
+                   lookback: int = VP_LOOKBACK) -> dict:
+    """Volume at price: where the shares actually changed hands.
+
+    Swing highs and lows say where price TURNED. This says where it TRADED,
+    which is a different and often better question. A level with a year of
+    volume piled on it is a wall made of people who own stock there and would
+    like their money back; a price range almost nobody traded is air.
+
+    Each bar's volume is spread evenly across its own high-low range rather
+    than dumped on its close, because a bar that ranged 5% did not do all its
+    business at one price. Without intraday data that is the honest
+    approximation, and it is the one most charting packages make too.
+    """
+    if "Volume" not in df.columns or len(df) < 30:
+        return {}
+    tail = df.tail(lookback)
+    hi = tail["High"].to_numpy(float)
+    lo = tail["Low"].to_numpy(float)
+    vol = tail["Volume"].to_numpy(float)
+    ok = np.isfinite(hi) & np.isfinite(lo) & np.isfinite(vol) & (vol > 0) & (hi >= lo)
+    hi, lo, vol = hi[ok], lo[ok], vol[ok]
+    if len(vol) < 20:
+        return {}
+    top, bottom = float(hi.max()), float(lo.min())
+    if not (top > bottom > 0):
+        return {}
+
+    edges = np.linspace(bottom, top, bins + 1)
+    width = edges[1] - edges[0]
+    if width <= 0:
+        return {}
+    buckets = np.zeros(bins, dtype=float)
+    # Spread each bar across the bins it covers. Vectorising this properly
+    # needs a loop over bars, but 250 bars x 40 bins is nothing.
+    for h, l, v in zip(hi, lo, vol):
+        first = int(np.clip((l - bottom) // width, 0, bins - 1))
+        last = int(np.clip((h - bottom) // width, 0, bins - 1))
+        if last < first:
+            first, last = last, first
+        buckets[first:last + 1] += v / (last - first + 1)
+    total = float(buckets.sum())
+    if total <= 0:
+        return {}
+
+    mids = (edges[:-1] + edges[1:]) / 2
+    poc_i = int(buckets.argmax())
+    # Value area: grow out from the point of control until 70% of the volume
+    # is inside it. That band is where the market agreed on a price.
+    lo_i = hi_i = poc_i
+    got = buckets[poc_i]
+    while got < total * VP_VALUE_AREA and (lo_i > 0 or hi_i < bins - 1):
+        down = buckets[lo_i - 1] if lo_i > 0 else -1.0
+        up = buckets[hi_i + 1] if hi_i < bins - 1 else -1.0
+        if up >= down:
+            hi_i += 1
+            got += up
+        else:
+            lo_i -= 1
+            got += down
+    shares = buckets / total
+    return {
+        "poc": round(float(mids[poc_i]), 2),
+        "valueHigh": round(float(edges[hi_i + 1]), 2),
+        "valueLow": round(float(edges[lo_i]), 2),
+        "binWidth": round(float(width), 2),
+        "prices": [round(float(m), 2) for m in mids],
+        "shares": [round(float(s), 4) for s in shares],
+        "bars": int(len(vol)),
+    }
+
+
+def volume_between(profile: dict, lo: float, hi: float) -> float:
+    """Share of the profile's volume sitting between two prices, 0 to 1.
+
+    This is the "runway" question: how much stock is parked between here and
+    the target, waiting to be sold back to you on the way up.
+    """
+    if not profile or lo is None or hi is None or hi <= lo:
+        return None
+    prices = profile.get("prices") or []
+    shares = profile.get("shares") or []
+    if not prices:
+        return None
+    return round(float(sum(s for p, s in zip(prices, shares) if lo < p <= hi)), 4)
+
+
+def volume_shelf(profile: dict, above: float, below: float,
+                 min_share: float = VP_SHELF_SHARE) -> dict:
+    """The heaviest price bin standing between two levels, if it is heavy.
+
+    A shelf below the measured move is where the move is likely to stall,
+    which makes it the honest target even though the formula says otherwise.
+    """
+    if not profile or above is None or below is None or below <= above:
+        return None
+    prices = profile.get("prices") or []
+    shares = profile.get("shares") or []
+    band = [(p, s) for p, s in zip(prices, shares) if above * 1.002 < p < below]
+    if not band:
+        return None
+    price, share = max(band, key=lambda x: x[1])
+    if share < min_share:
+        return None
+    return {"price": price, "share": round(share, 4)}
+
+
+def breakout_volume(df: pd.DataFrame, entry: float, from_idx: int) -> dict:
+    """The volume on the bar that actually cleared the entry level.
+
+    Different question from the one `volume_state` answers. That one asks
+    whether the bar the PATTERN completed on had conviction behind it. This
+    asks about the bar that broke the level -- the one where buyers had to
+    outbid everybody who has been trapped at that price. For a breakout trade
+    it is the more relevant bar, and until now the scan never looked at it.
+    """
+    blank = {"breakoutVolumeRatio": None, "breakoutVolumeConfirmed": None,
+             "breakoutDate": None, "breakoutBars": None, "brokeOut": False}
+    if entry is None or "Volume" not in df.columns:
+        return blank
+    n = len(df)
+    start = max(0, int(from_idx) if from_idx is not None else 0)
+    close = df["Close"].to_numpy(float)
+    vol = df["Volume"].to_numpy(float)
+    hit = None
+    # A breakout is a CLOSE above the level, not a wick through it. Every
+    # source says so, and it is the difference between a breakout and the
+    # false breakout everyone warns about. This used to look at the high,
+    # which meant a bar that poked above and closed back under counted as
+    # the breakout bar and had its volume reported as confirmation.
+    for j in range(start + 1, n):
+        if np.isfinite(close[j]) and close[j] > entry:
+            hit = j
+            break
+    if hit is None:
+        return blank                    # not triggered yet: nothing to measure
+    lo = max(0, hit - VOL_LOOKBACK)
+    window = vol[lo:hit]
+    if not len(window):
+        return blank
+    avg = float(np.nanmean(window))
+    here = float(vol[hit])
+    if not (np.isfinite(avg) and avg > 0 and np.isfinite(here)):
+        return blank
+    return {
+        "breakoutVolumeRatio": round(here / avg, 2),
+        "breakoutVolumeConfirmed": bool(here >= avg * VOL_CONFIRM_MULT),
+        "breakoutDate": df.index[hit].strftime("%Y-%m-%d"),
+        "breakoutBars": int(n - 1 - hit),
+        "brokeOut": True,
     }
 
 
@@ -1265,7 +1844,7 @@ def ground_stop(setup: dict, atr: float, levels: list) -> dict:
 
 
 def attach_reward(setup: dict, levels: list, price: float,
-                  high52: float = None) -> dict:
+                  high52: float = None, profile: dict = None) -> dict:
     """The reward half of risk:reward, and where it comes from.
 
     Preference order, because they are not equally trustworthy:
@@ -1318,6 +1897,18 @@ def attach_reward(setup: dict, levels: list, price: float,
         setup["rr"] = None
         setup["poorRR"] = False
         return setup
+
+    # A shelf of real traded volume between here and the target is where the
+    # move is likely to stall, whatever the measured move says. Cap there and
+    # say so, rather than printing a ratio that needs a wall to evaporate.
+    shelf = volume_shelf(profile, entry, target)
+    if shelf:
+        target = shelf["price"]
+        source = f"volume shelf ({round(shelf['share'] * 100)}% of a year's trade)"
+        setup["shelfShare"] = shelf["share"]
+
+    # How much stock is parked between the entry and the target: the runway.
+    setup["runway"] = volume_between(profile, entry, target)
 
     rr = (target - entry) / rps
     setup["target"] = round(target, 2)
@@ -1379,16 +1970,41 @@ def historical_signals(df: pd.DataFrame) -> list:
                     "date": dates[i], "volOK": vol_ok(i), "atrPct": atr_pct(i)})
 
     # --- candlestick setups: local, so just walk the bars -------------------
+    # These must apply EXACTLY the live rules. When the replay is a loose
+    # paraphrase of the detector, the hit rate on the page is a number about a
+    # pattern nobody trades.
+    bodies = (c - o).abs().to_numpy(float)
+    opens = o.to_numpy(float)
     for i in range(TREND_BARS + 1, n):
         if not in_downtrend(c, i - 1):
             continue
-        po, pc = float(o.iloc[i - 1]), float(c.iloc[i - 1])
-        co, cc = float(o.iloc[i]), float(c.iloc[i])
+        po, pc = opens[i - 1], float(c.iloc[i - 1])
+        co, cc = opens[i], float(c.iloc[i])
+
         if pc < po and cc > co and cc >= po and co <= pc:
-            emit("engulfing", i, float(h.iloc[i]), float(l.iloc[i]))
+            lo_b = max(0, i - ENGULF_LOOKBACK)
+            avg_body = np.nanmean(bodies[lo_b:i]) if i > lo_b else np.nan
+            stands_out = (not np.isfinite(avg_body) or avg_body <= 0 or
+                          bodies[i] >= avg_body * ENGULF_BODY_MULT)
+            evol = True
+            if vol is not None:
+                lo_v = max(0, i - VOL_LOOKBACK)
+                av = np.nanmean(vol[lo_v:i]) if i > lo_v else np.nan
+                if np.isfinite(av) and av > 0:
+                    evol = vol[i] >= av * ENGULF_VOL_MULT
+            if stands_out and evol:
+                emit("engulfing", i, float(h.iloc[i]), float(l.iloc[i]))
+
         tol = unit(i) * TWEEZER_TOL_ATR
         if abs(lows_arr[i] - lows_arr[i - 1]) <= tol:
-            emit("tweezer", i, float(h.iloc[i]), min(lows_arr[i], lows_arr[i - 1]))
+            first_falls = pc < po
+            second_turns = cc > co
+            tvol = True
+            if vol is not None and np.isfinite(vol[i - 1]) and vol[i - 1] > 0:
+                tvol = vol[i] >= vol[i - 1] * TWEEZER_VOL_MIN
+            if first_falls and second_turns and tvol:
+                emit("tweezer", i, float(h.iloc[i]),
+                     min(lows_arr[i], lows_arr[i - 1]))
 
     plows = pivot_lows(l)
     phighs = pivot_highs(h)
@@ -1408,6 +2024,24 @@ def historical_signals(df: pd.DataFrame) -> list:
                 neck = float(h.iloc[a:b + 1].max())
                 emit("divergence", b, neck, neck - unit(b) * ATR_MULT)
             break
+
+    # --- money-flow divergence: lower low on price, higher low on A/D -------
+    adv = ad_line(df).to_numpy(float) if "Volume" in df.columns else None
+    if adv is not None and np.isfinite(adv).any():
+        for x in range(1, len(plows)):
+            b = plows[x]
+            for y in range(x - 1, -1, -1):
+                a = plows[y]
+                if b - a > DIV_WINDOW:
+                    break
+                if lows_arr[b] >= lows_arr[a]:
+                    continue
+                if not (np.isfinite(adv[a]) and np.isfinite(adv[b])):
+                    break
+                if adv[b] > adv[a]:
+                    neck = float(h.iloc[a:b + 1].max())
+                    emit("flowdiv", b, neck, neck - unit(b) * ATR_MULT)
+                break
 
     # --- double bottom ------------------------------------------------------
     for x in range(1, len(plows)):
@@ -1470,7 +2104,21 @@ def historical_signals(df: pd.DataFrame) -> list:
     # idea the live scan uses -- without recomputing every level from scratch
     # for each of several thousand historical signals.
     hi_at = [(j, highs_arr[j]) for j in phighs]
+    highs_all = h.to_numpy(float)
+    closes_all = c.to_numpy(float)
     for sig in out:
+        # The bar that cleared the level, and whether IT had volume behind it.
+        # Different bar from the one the pattern completed on, and for a
+        # breakout trade the more relevant of the two.
+        sig["bvolOK"] = None
+        if vol is not None and sig["entry"]:
+            for j in range(sig["i"] + 1, min(n, sig["i"] + 1 + BT_TRIGGER_BARS)):
+                if closes_all[j] > sig["entry"]:      # a close, not a wick
+                    lo2 = max(0, j - VOL_LOOKBACK)
+                    avg2 = np.nanmean(vol[lo2:j]) if j > lo2 else np.nan
+                    if np.isfinite(avg2) and avg2 > 0:
+                        sig["bvolOK"] = bool(vol[j] >= avg2 * VOL_CONFIRM_MULT)
+                    break
         e, st = sig["entry"], sig["stop"]
         risk = (e - st) if (e is not None and st is not None) else None
         wall = None
@@ -1548,7 +2196,8 @@ def tercile_as_at(timeline: list, date: str, sector: str):
 
 
 def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
-                      timeline: list = None, regime: dict = None) -> dict:
+                      timeline: list = None, regime: dict = None,
+                      deliv_hist: dict = None) -> dict:
     """Hit rates per pattern, and per FILTER.
 
     The second half is the point: every knob on the dashboard is an opinion
@@ -1570,6 +2219,9 @@ def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
         daily = frames.get(sym)
         if daily is None or len(daily) < 120:
             continue
+        dser = (deliv_hist or {}).get(sym) or {}
+        dvals = list(dser.values())
+        dmean = (sum(dvals) / len(dvals)) if dvals else None
         scanned += 1
         sector = ((meta or {}).get(sym) or {}).get("industry")
         for tf in TIMEFRAMES:
@@ -1592,6 +2244,23 @@ def backtest_patterns(frames: dict, symbols: list, meta: dict = None,
                 if sig.get("volOK") is not None:
                     note("volume", "Volume confirmed on the signal bar", tf,
                          sig["volOK"], verdict)
+                if sig.get("bvolOK") is not None:
+                    note("bvol", "Volume on the breakout bar", tf,
+                         sig["bvolOK"], verdict)
+                # Delivery only reaches back as far as the cache, so most of a
+                # five-year history has no reading and is simply not counted.
+                # The split's own sample size says how much to trust it.
+                if dser and delivery is not None:
+                    dpct = delivery.on_date(dser, sig["date"])
+                    if dpct is not None:
+                        davg = dmean
+                        note("deliv",
+                             f"Delivery above {DELIV_HIGH:.0f}%", tf,
+                             dpct >= DELIV_HIGH, verdict)
+                        if davg:
+                            note("delivspike",
+                                 "Delivery above the stock's own average", tf,
+                                 dpct >= davg * DELIV_SPIKE, verdict)
                 if sig.get("atrPct") is not None:
                     note("atrpct", f"ATR% above {floor:.0f}", tf,
                          sig["atrPct"] > floor, verdict)
@@ -1780,7 +2449,7 @@ def bar_is_complete(daily: pd.DataFrame, resampled: pd.DataFrame, tf: str) -> bo
 
 
 def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
-            bench: pd.Series = None) -> dict:
+            bench: pd.Series = None, deliv: dict = None) -> dict:
     df = df.dropna(subset=["Close"]).copy()
     industry = (meta or {}).get("industry", "Unclassified")
     tags = (meta or {}).get("universes", [])
@@ -1906,6 +2575,8 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         raw.extend(find_double_bottom(df, last_atr))
     if "invhs" in SETUPS:
         raw.extend(find_inverse_hs(df, last_atr))
+    if "flowdiv" in SETUPS:
+        raw.extend(find_flow_divergence(df, last_atr))
 
     # Continuation and base patterns. These come back already carrying their
     # own entry, stop and measured move, because for a consolidation those
@@ -1918,15 +2589,22 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
     # number -- quantity, deployment, amount at risk, risk:reward -- is derived
     # from the distance between entry and stop. Size it, then measure the reward
     # against a price the chart can actually reach.
+    profile = volume_profile(df)
     setups = []
     for s in raw:
         s.setdefault("direction", "long")
         ground_stop(s, last_atr, levels)
         size_setup(s, last_price)
-        attach_reward(s, levels, last_price, high_52)
+        attach_reward(s, levels, last_price, high_52, profile)
         age = s.get("ageBars")
         sig_idx = (len(df) - 1 - age) if isinstance(age, int) else len(df) - 1
         s.update(volume_state(df, sig_idx))
+        # ...and the OTHER volume question: the bar that cleared the level.
+        s.update(breakout_volume(df, s.get("entry"), sig_idx))
+        # Delivery on the day the setup formed: volume says shares moved,
+        # delivery says somebody kept them.
+        if deliv and delivery is not None:
+            s["delivOnSignal"] = delivery.on_date(deliv, s.get("date"))
         setups.append(s)
 
     # --- topping patterns: warnings, never entries -------------------------
@@ -2005,6 +2683,19 @@ def analyse(symbol: str, name: str, meta: dict, df: pd.DataFrame,
         "targetTouches": (primary or {}).get("targetTouches"),
         "volumeConfirmed": (primary or {}).get("volumeConfirmed"),
         "volumeRatio": (primary or {}).get("volumeRatio"),
+        "breakoutVolumeConfirmed": (primary or {}).get("breakoutVolumeConfirmed"),
+        "breakoutVolumeRatio": (primary or {}).get("breakoutVolumeRatio"),
+        "breakoutDate": (primary or {}).get("breakoutDate"),
+        "breakoutBars": (primary or {}).get("breakoutBars"),
+        "brokeOut": bool((primary or {}).get("brokeOut")),
+        "runway": (primary or {}).get("runway"),
+        "shelfShare": (primary or {}).get("shelfShare"),
+        # The profile itself, minus the forty-bucket histogram: the page wants
+        # the three prices, not a year of buckets on every one of 750 rows.
+        "delivOnSignal": (primary or {}).get("delivOnSignal"),
+        "poc": (profile or {}).get("poc"),
+        "valueHigh": (profile or {}).get("valueHigh"),
+        "valueLow": (profile or {}).get("valueLow"),
         "setupTypes": sorted({s["type"] for s in setups}),
         "primary": primary["type"] if primary else None,
         "resTouches": res_touches,
@@ -2040,14 +2731,14 @@ STOCK_FIELDS  = ("turnover", "low52", "high52")
 
 
 def build_record(symbol: str, name: str, meta: dict, daily: pd.DataFrame,
-                 benches: dict) -> dict:
+                 benches: dict, deliv: dict = None) -> dict:
     """One stock across every timeframe, as a single record."""
     results, complete = {}, {}
     for tf in TIMEFRAMES:
         frame = resample_tf(daily, tf)
         complete[tf] = bar_is_complete(daily, frame, tf)
         try:
-            results[tf] = analyse(symbol, name, meta, frame, benches.get(tf))
+            results[tf] = analyse(symbol, name, meta, frame, benches.get(tf), deliv)
         except Exception as exc:  # noqa: BLE001
             results[tf] = {
                 "symbol": symbol, "name": name,
@@ -2064,6 +2755,11 @@ def build_record(symbol: str, name: str, meta: dict, daily: pd.DataFrame,
     # years. Neither is a property of the candle size.
     for k in STOCK_FIELDS:
         rec[k] = base.get(k)
+
+    # Delivery is a daily-only figure -- NSE publishes one number per session --
+    # so it describes the stock, not the candle size you are looking at.
+    if delivery is not None:
+        rec.update(delivery.metrics(deliv or {}))
 
     # Recent daily bars for the journal: [high, low, close] per session,
     # aligned to the payload's shared date axis.
@@ -2232,6 +2928,37 @@ def main() -> int:
         benches[tf] = (bench.resample(rule).last().dropna()
                        if (bench is not None and not bench.empty and rule) else None)
 
+    # --- delivery percentage ------------------------------------------------
+    # NSE publishes one file per session and there is no bulk download, so the
+    # first run walks back a year (a few minutes, once) and every run after it
+    # collects the single day it is missing. Bounded by a time budget: a slow
+    # NSE evening must not be able to hang the whole scan.
+    deliv_hist = {}
+    if DELIVERY and delivery is not None:
+        try:
+            stat = delivery.ensure_history(days=DELIVERY_DAYS)
+            hist = delivery.load_history(days=DELIVERY_DAYS)
+            print(f"  delivery: {stat['cached']} of {stat['days']} weekdays cached "
+                  f"({stat['fetched']} fetched this run, {stat['holidays']} holidays, "
+                  f"{stat['seconds']}s)", flush=True)
+            if hist:
+                wanted = {row["symbol"] for row in watchlist}
+                for sym in wanted:
+                    ser = delivery.for_symbol(hist, sym)
+                    if ser:
+                        deliv_hist[sym] = ser
+                print(f"  delivery: history for {len(deliv_hist)} of {len(wanted)} "
+                      f"stocks across {len(hist)} sessions", flush=True)
+            else:
+                print("  delivery: nothing cached yet -- the page hides the "
+                      "column until there is", flush=True)
+        except Exception as exc:  # noqa: BLE001
+            # Delivery is an extra, not a dependency. If NSE will not talk to
+            # us the scan still has to produce a page.
+            print(f"  delivery unavailable ({exc}) -- carrying on without it",
+                  flush=True)
+        t = phase("delivery percentage", t)
+
     frames, missing = fetch_frames([row["symbol"] for row in watchlist])
     t = phase("price downloads", t)
     if not frames:
@@ -2244,7 +2971,8 @@ def main() -> int:
         if sym not in frames:
             continue
         try:
-            rows.append(build_record(sym, row["name"], row, frames[sym], benches))
+            rows.append(build_record(sym, row["name"], row, frames[sym], benches,
+                                     deliv_hist.get(sym)))
         except Exception as exc:  # noqa: BLE001
             print(f"  {sym}: {exc}", flush=True)
             missing.append(sym)
@@ -2303,7 +3031,8 @@ def main() -> int:
               f"({BT_TARGET_R:.0f}R target, {BT_HOLD_BARS}-bar horizon)", flush=True)
         t0 = time.time()
         timeline = sector_rank_timeline(sec_series)
-        backtest = backtest_patterns(frames, sample, meta, timeline, regime_map)
+        backtest = backtest_patterns(frames, sample, meta, timeline, regime_map,
+                                     deliv_hist)
         print(f"  took {time.time() - t0:.0f}s", flush=True)
         for rec in backtest["rows"]:
             rate = f"{rec['hitRate']}%" if rec["hitRate"] is not None else "n/a"
@@ -2344,6 +3073,14 @@ def main() -> int:
         "sectorWindows": {"long": SECTOR_LONG, "short": SECTOR_SHORT,
                           "skip": SECTOR_SKIP},
         "regime": {"above": regime_now, "ma": REGIME_MA},
+        # The page hides its delivery column entirely when this says nothing
+        # has been collected yet, rather than printing a column of dashes on
+        # the first run while the backfill is still catching up.
+        "delivery": {
+            "stocks": len(deliv_hist),
+            "sessions": len({d for ser in deliv_hist.values() for d in ser}),
+            "high": DELIV_HIGH, "spike": DELIV_SPIKE,
+        },
         "baseTimeframe": BASE_TF,
         "timeframes": [
             {"key": tf, "label": TF_LABEL.get(tf, tf),

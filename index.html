@@ -256,10 +256,22 @@ tr.row.poorrr td:not(:first-child){opacity:.55}
 .sbadge{display:inline-block; font-family:var(--display); font-size:9.5px; font-weight:700; letter-spacing:.07em;
   padding:3px 5px; border-radius:2px; border:1px solid; background:transparent}
 .s-divergence{color:var(--sprout); border-color:var(--sprout-line)}
+.s-flowdiv{color:var(--sprout); border-color:var(--sprout-line)}
 .s-engulfing{color:var(--brass); border-color:var(--brass-line)}
 .s-tweezer{color:var(--tweez); border-color:currentColor}
 .s-doublebottom{color:var(--sprout); border-color:var(--sprout-line)}
 .s-invhs{color:var(--brass); border-color:var(--brass-line)}
+/* continuation and base patterns */
+.s-flag,.s-pennant{color:var(--brass); border-color:var(--brass-line)}
+.s-rounding,.s-cuphandle{color:var(--sprout); border-color:var(--sprout-line)}
+.s-asctriangle,.s-symtriangle{color:var(--sprout); border-color:var(--sprout-line)}
+.s-rectangle{color:var(--tweez); border-color:currentColor}
+.s-desctriangle{color:var(--clay); border-color:currentColor}
+.sbadge.more{color:var(--faint); border-color:var(--line); font-family:var(--mono);
+  letter-spacing:0; cursor:help}
+/* Keep the badges on one line. Before this, a stock showing five patterns
+   stacked them vertically and stretched its row to the height of a card. */
+.setupcell{min-width:172px; white-space:nowrap}
 .touch{font-family:var(--mono); font-size:10.5px; color:var(--faint); margin-left:5px}
 .toosmall{font-family:var(--display); font-size:10px; font-weight:600; letter-spacing:.05em;
   text-transform:uppercase; color:var(--clay)}
@@ -341,6 +353,16 @@ tbody tr.fire td:first-child{background:linear-gradient(var(--brass-soft),var(--
 .volx.on{color:var(--sprout); font-weight:600}
 .volx.on::before{content:"\25B2"; font-size:8px; margin-right:3px; vertical-align:1px}
 .volx.off{color:var(--faint)}
+.dlv{font-family:var(--mono); font-size:12px; color:var(--muted)}
+.dlv.on{color:var(--sprout); font-weight:600}
+.dlv i{font-style:normal; font-size:10.5px; color:var(--faint); margin-left:4px}
+.dlv.on i{color:var(--sprout)}
+/* Hidden wholesale until the backfill has collected something, so a first
+   run shows no column rather than a column of dashes. */
+body.no-deliv .col-deliv{display:none}
+.bvx{display:inline-block; margin-left:4px; font-family:var(--display); font-size:9px;
+  font-weight:700; color:var(--sprout); border:1px solid var(--sprout-line);
+  border-radius:2px; padding:0 3px; vertical-align:1px; cursor:help}
 .divmark{font-family:var(--mono); font-size:13px}
 .divmark.yes{color:var(--sprout); font-weight:600}
 .divmark.no{color:var(--faint)}
@@ -369,6 +391,11 @@ footer b{color:var(--muted); font-weight:600}
 
 /* ---------- phone ---------- */
 .ctrltoggle{display:none}
+/* A class rule that sets `display` beats the browser's own [hidden] rule,
+   which is why "Show more" was sitting under the desktop table doing
+   nothing: the code had hidden it and the stylesheet was un-hiding it.
+   One global rule, so the next element with a display rule cannot repeat it. */
+[hidden]{display:none !important}
 .moreWrap{display:flex; justify-content:center; margin-top:12px}
 .mcard{background:var(--surface); border:1px solid var(--line); border-radius:6px; margin-bottom:10px;
   overflow:hidden; position:relative}
@@ -601,6 +628,8 @@ footer b{color:var(--muted); font-weight:600}
       <button class="chip" data-f="oversold" aria-pressed="false">RSI &lt; 30</button>
       <button class="chip" data-f="near" aria-pressed="false">Near breakout</button>
       <button class="chip" data-f="volume" aria-pressed="false" title="the signal bar traded at least 1.2x its own 20-bar average — your best-performing filter in the backtest">Volume confirmed</button>
+      <button class="chip col-deliv" data-f="delivery" aria-pressed="false" title="delivery above 65%, or well above this stock's own 20-day average — shares that were bought and kept, not churned">High delivery</button>
+      <button class="chip" data-f="bvolume" aria-pressed="false" title="the bar that actually cleared the entry level traded at least 1.2x its own average — the bar where buyers had to outbid everyone trapped at that price">Breakout on volume</button>
       <button class="chip" data-f="goodrr" aria-pressed="false">Meets R:R</button>
       <button class="chip" data-f="starred" aria-pressed="false">★ My watchlist</button>
       <span class="andnote" id="andNote"></span>
@@ -631,11 +660,12 @@ footer b{color:var(--muted); font-weight:600}
         <tr>
           <th class="l">Stock</th><th class="col-spark">Chart</th><th>Close ₹</th><th>RSI (14)</th><th>Setup</th>
           <th title="volume on the signal bar against its own 20-bar average">Volume</th>
+          <th class="col-deliv" title="share of the day's traded shares that were actually taken delivery of, rather than squared off intraday">Delivery</th>
           <th>ATR %</th><th>vs Nifty</th><th>Resistance ₹</th><th>To break</th><th>Stop ₹</th>
           <th class="col-target">Target ₹</th><th class="col-target">Risk : Reward</th><th>Qty</th><th>State</th><th></th>
         </tr>
       </thead>
-      <tbody id="tbody"><tr><td colspan="16" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
+      <tbody id="tbody"><tr><td colspan="17" style="padding:18px"><div class="skel" style="width:40%"></div></td></tr></tbody>
     </table>
   </div>
 
@@ -697,7 +727,7 @@ footer b{color:var(--muted); font-weight:600}
   function isStar(sym){ return !!starred[sym]; }
   var picked=[], agreeMode='all';
   var KEY='midcap-reversal-desk';
-  var COLS=16;
+  var COLS=17;
 
   function $(id){ return document.getElementById(id); }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
@@ -787,6 +817,14 @@ footer b{color:var(--muted); font-weight:600}
       // that prints as 1:2.00 gets flagged for being below 1:2.
       poorRR: (rr != null && Math.round(rr * 100) / 100 < minRR()),
       volumeConfirmed: sx.volumeConfirmed, volumeRatio: sx.volumeRatio,
+      breakoutVolumeConfirmed: sx.breakoutVolumeConfirmed,
+      breakoutVolumeRatio: sx.breakoutVolumeRatio, breakoutDate: sx.breakoutDate,
+      brokeOut: sx.brokeOut, breakoutBars: sx.breakoutBars,
+      runway: sx.runway, shelfShare: sx.shelfShare,
+      delivOnSignal: sx.delivOnSignal,
+      // The profile belongs to the stock's chart, not to this one setup, so
+      // it comes off the row rather than off `sx`.
+      poc: r.poc, valueHigh: r.valueHigh, valueLow: r.valueLow,
       type:sx.type, label:sx.label || setupLabel(sx.type), date:sx.date, detail:sx.detail,
       entry:entry, stop:stop, rps:rps, qty:qty, mults:mults,
       deploy:(qty!=null&&entry!=null)?qty*entry:null,
@@ -860,6 +898,13 @@ footer b{color:var(--muted); font-weight:600}
       target:shown.target, targetSource:shown.targetSource,
       rr:shown.rr, poorRR:shown.poorRR,
       volumeConfirmed:shown.volumeConfirmed, volumeRatio:shown.volumeRatio,
+      breakoutVolumeConfirmed:shown.breakoutVolumeConfirmed,
+      breakoutVolumeRatio:shown.breakoutVolumeRatio,
+      breakoutDate:shown.breakoutDate,
+      brokeOut:shown.brokeOut, breakoutBars:shown.breakoutBars,
+      runway:shown.runway, shelfShare:shown.shelfShare,
+      poc:shown.poc, valueHigh:shown.valueHigh, valueLow:shown.valueLow,
+      delivOnSignal:shown.delivOnSignal,
       sxs:sxs, lead:lead
     });
   }
@@ -939,7 +984,10 @@ footer b{color:var(--muted); font-weight:600}
       goodrr:    function(r){ return r.rr != null && Math.round(r.rr * 100) / 100 >= minRR(); },
       // The backtest's best filter on both timeframes: +4.1 points daily,
       // +5.3 weekly. Only about a fifth of signals pass it.
-      volume:    function(r){ return r.volumeConfirmed === true; }
+      volume:    function(r){ return r.volumeConfirmed === true; },
+      // A different bar from the one above: the one that broke the level.
+      bvolume:   function(r){ return r.breakoutVolumeConfirmed === true; },
+      delivery:  function(r){ return delivHigh(r); }
     };
     filters.forEach(function(k){
       var t = TESTS[k];
@@ -993,11 +1041,19 @@ footer b{color:var(--muted); font-weight:600}
              (r.volumeConfirmed && parseFloat(one) < 1.2))
             ? x.toFixed(2) + '×' : one + '×';
     }
+    // A small B when the bar that CLEARED the level also had volume behind
+    // it. Two different bars, two different questions, one column.
+    var brk = '';
+    if(r.breakoutVolumeConfirmed === true){
+      brk = '<span class="bvx" title="the breakout bar traded '+
+        (r.breakoutVolumeRatio != null ? r.breakoutVolumeRatio.toFixed(1)+'×' : 'above')+
+        ' its own average'+(r.breakoutDate ? ' on '+esc(r.breakoutDate) : '')+'">B</span>';
+    }
     return '<span class="volx '+(r.volumeConfirmed ? 'on' : 'off')+'" title="'+
       (r.volumeConfirmed
         ? 'confirmed: the signal bar traded '+txt+' its 20-bar average'
         : 'thin: the signal bar traded '+txt+' its 20-bar average, below the 1.2× mark')+
-      '">'+txt+'</span>';
+      '">'+txt+'</span>'+brk;
   }
   function meter(rsi){
     if(rsi==null) return '<span class="meter"><em></em><u></u></span>';
@@ -1122,7 +1178,24 @@ footer b{color:var(--muted); font-weight:600}
           ? '<div class="mathrow"><span>Volume on the signal</span><span>'+
             (r.volumeConfirmed ? 'confirmed' : 'thin')+
             (r.volumeRatio != null ? ' ('+r.volumeRatio.toFixed(1)+'x its average)' : '')+
-            '</span></div>'
+            '</span></div>'+
+            (r.brokeOut
+              ? '<div class="mathrow"><span>Broke out</span><span class="'+
+                (r.state === 'triggered' ? 'up' : '')+'">'+
+                esc(r.breakoutDate || '')+
+                (r.breakoutBars != null ? ' ('+r.breakoutBars+' bars ago)' : '')+
+                (r.state === 'triggered' ? '' :
+                  ' \u2014 and has since closed back below the level')+
+                '</span></div>'
+              : '<div class="mathrow"><span>Broke out</span><span>not yet \u2014 '+
+                'no session has CLOSED above the entry</span></div>')+
+            (r.breakoutVolumeRatio != null
+              ? '<div class="mathrow"><span>Volume on the breakout bar</span><span>'+
+                (r.breakoutVolumeConfirmed ? 'confirmed' : 'thin')+
+                ' ('+r.breakoutVolumeRatio.toFixed(1)+'x'+
+                (r.breakoutDate ? ', '+esc(r.breakoutDate) : '')+')</span></div>'
+              : '')+
+            delivRows(r) + profileRows(r)
           : '')+
         '<div class="mathrow"><span>Candle size</span><span>'+esc(tfLabel(timeframe))+
           (r.barComplete === false ? ' (still forming)' : '')+'</span></div>'+
@@ -1147,6 +1220,7 @@ footer b{color:var(--muted); font-weight:600}
 
   var SETUP_META = {
     divergence:  {label:'RSI divergence', short:'DIV'},
+    flowdiv:     {label:'Money-flow divergence', short:'FLO'},
     engulfing:   {label:'Bullish engulfing', short:'ENG'},
     tweezer:     {label:'Tweezer bottom', short:'TWZ'},
     doublebottom:{label:'Double bottom', short:'DB'},
@@ -1168,7 +1242,8 @@ footer b{color:var(--muted); font-weight:600}
   // Picking "Double top / bottom" finds both the W and the M -- one is an
   // entry, the other a warning, and you want to know about either.
   var SETUP_FAMILIES = [
-    {key:'divergence',   label:'RSI divergence',           short:'DIV',  members:['divergence']},
+    {key:'divergence',   label:'Divergence: RSI / money flow', short:'DIV',
+                                                            members:['divergence','flowdiv']},
     {key:'engulfing',    label:'Bullish engulfing',        short:'ENG',  members:['engulfing']},
     {key:'tweezer',      label:'Tweezer bottom',           short:'TWZ',  members:['tweezer']},
     {key:'double',       label:'Double top / bottom',      short:'DB/DT',members:['doublebottom','doubletop']},
@@ -1215,8 +1290,79 @@ footer b{color:var(--muted); font-weight:600}
   function setupShort(t){ return (SETUP_META[t]||{}).short || (t||'').slice(0,3).toUpperCase(); }
   // A setup that also prints on another candle size carries a small marker.
   // It only marks -- it does not reorder anything.
+  // With thirteen patterns in the scan, a single stock can legitimately show
+  // five at once -- and five badges stacked in a narrow column turn one row
+  // into two hundred pixels of table. Show the first few and count the rest;
+  // the drawer lists every one of them in full.
+  function delivRows(r){
+    if(r.delivPct == null) return '';
+    var out = '<div class="mathrow"><span>Delivery, latest session</span><span class="'+
+      (delivHigh(r) ? 'up' : '')+'">'+r.delivPct.toFixed(0)+'% of the volume kept'+
+      (r.delivAvg != null ? ' (20-day average '+r.delivAvg.toFixed(0)+'%)' : '')+
+      '</span></div>';
+    if(r.delivOnSignal != null){
+      out += '<div class="mathrow"><span>Delivery on the signal day</span><span>'+
+        r.delivOnSignal.toFixed(0)+'%</span></div>';
+    }
+    return out;
+  }
+
+  // Where the shares actually changed hands, as opposed to where price turned.
+  // The runway is the share of a year's trading that sits between your entry
+  // and your target: low means clear air, high means you are buying into a
+  // crowd of people who want their money back at that price.
+  function profileRows(r){
+    var out = '';
+    if(r.poc != null){
+      out += '<div class="mathrow"><span>Most-traded price (a year)</span><span>'+
+        INR.format(r.poc)+
+        (r.valueLow != null && r.valueHigh != null
+          ? ' — 70% traded '+INR.format(r.valueLow)+'–'+INR.format(r.valueHigh)
+          : '')+'</span></div>';
+    }
+    if(r.runway != null){
+      var pct = r.runway * 100;
+      var word = pct <= 12 ? 'clear' : pct <= 30 ? 'some overhead' : 'heavy overhead';
+      out += '<div class="mathrow"><span>Runway to the target</span><span class="'+
+        (pct <= 12 ? 'up' : '')+'">'+pct.toFixed(0)+'% of the year’s volume in the way — '+
+        word+'</span></div>';
+    }
+    return out;
+  }
+
+  // Delivery percentage: of the shares that changed hands, how many were
+  // carried home. Only NSE and BSE publish it, which is why no imported
+  // screener shows it. The RATIO against the stock's own average is the part
+  // that means something -- a stock that always delivers 70% has not told you
+  // anything by delivering 70% today.
+  function delivHigh(r){
+    var d = (data && data.delivery) || {};
+    var hi = d.high || 65, sp = d.spike || 1.3;
+    if(r.delivPct == null) return false;
+    return r.delivPct >= hi || (r.delivRatio != null && r.delivRatio >= sp);
+  }
+  function delivCell(r){
+    if(r.delivPct == null) return '<span class="stale">—</span>';
+    var on = delivHigh(r);
+    var tip = r.delivPct.toFixed(0) + '% of the day\u2019s volume was delivered' +
+      (r.delivAvg != null ? ', against a 20-day average of ' + r.delivAvg.toFixed(0) + '%' : '') +
+      (r.delivDate ? ' (' + r.delivDate + ')' : '');
+    return '<span class="dlv' + (on ? ' on' : '') + '" title="' + esc(tip) + '">' +
+      r.delivPct.toFixed(0) + '%' +
+      (r.delivRatio != null && r.delivRatio >= 1.15
+        ? '<i>' + r.delivRatio.toFixed(1) + '\u00d7</i>' : '') + '</span>';
+  }
+
+  var BADGE_MAX = 3;
   function setupBadges(types, agree){
     if(!types || !types.length) return '<span class="stale">—</span>';
+    if(types.length > BADGE_MAX){
+      var extra = types.slice(BADGE_MAX);
+      return setupBadges(types.slice(0, BADGE_MAX), agree) +
+        '<span class="sbadge more" title="also ' +
+        esc(extra.map(setupLabel).join(', ')) + ' — open the row to see them">+' +
+        extra.length + '</span>';
+    }
     return types.map(function(t){
       var others = ((agree||{})[t]||[]).filter(function(k){ return k !== timeframe; });
       var mark = others.length
@@ -1388,6 +1534,15 @@ footer b{color:var(--muted); font-weight:600}
     $('andNote').textContent = active.length > 1
       ? 'all ' + active.length + ' must match' : '';
     document.body.classList.toggle('no-target', !showTarget);
+    // Delivery arrives a day at a time. Until the backfill has collected
+    // something there is nothing to show, so the column and its chip go away
+    // rather than standing there full of dashes.
+    var haveDeliv = !!(data && data.delivery && data.delivery.stocks);
+    document.body.classList.toggle('no-deliv', !haveDeliv);
+    if(!haveDeliv && hasFilter('delivery')){
+      filters = filters.filter(function(k){ return k !== 'delivery'; });
+      save();
+    }
   }
 
   function renderTimeframes(){
@@ -1522,7 +1677,10 @@ footer b{color:var(--muted); font-weight:600}
 
   /* ---------- phone layout: cards instead of a 13-column table ---------- */
   function isPhone(){ return window.matchMedia('(max-width: 700px)').matches; }
-  var pageSize = 20, shownCount = pageSize;
+  // A phone shows twenty at a time; a desktop screen holds far more than that
+  // before you have to scroll, so make it earn the width.
+  function pageFor(){ return isPhone() ? 20 : 60; }
+  var pageSize = pageFor(), shownCount = pageSize;
 
   function mcell(k, v, cls){
     return '<div class="mc-cell"><span class="k">'+k+'</span><span class="v '+(cls||'')+'">'+v+'</span></div>';
@@ -1547,6 +1705,8 @@ footer b{color:var(--muted); font-weight:600}
         '<span class="mc-chip">RSI '+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+
         (r.volumeRatio!=null?'<span class="mc-chip '+(r.volumeConfirmed?'up':'')+'">Vol '+
           r.volumeRatio.toFixed(1)+'×</span>':'')+
+        (r.delivPct!=null?'<span class="mc-chip '+(delivHigh(r)?'up':'')+'">Deliv '+
+          r.delivPct.toFixed(0)+'%</span>':'')+
         (r.atrPct!=null?'<span class="mc-chip">ATR '+r.atrPct.toFixed(1)+'%</span>':'')+
         (r.outperforming!=null?'<span class="mc-chip '+(r.outperforming?'up':'')+'">'+
           (r.outperforming?'beats':'lags')+' Nifty</span>':'')+
@@ -1566,17 +1726,24 @@ footer b{color:var(--muted); font-weight:600}
     '</article>';
   }
 
+  // One paging control for both layouts, so the button cannot end up saying
+  // something the list below it disagrees with.
+  function showMore(shown, total){
+    var more = $('moreWrap');
+    var left = total - shown;
+    if(left > 0){
+      more.hidden = false;
+      $('moreBtn').textContent = 'Show ' + Math.min(pageSize, left) +
+        ' more (' + left + ' left)';
+    } else { more.hidden = true; }
+  }
+
   function renderCards(list){
     var slice = list.slice(0, shownCount);
     $('cardlist').innerHTML = slice.length
       ? slice.map(mcard).join('')
       : '<div class="empty">Nothing matches that filter.</div>';
-    var more = $('moreWrap');
-    if(list.length > slice.length){
-      more.hidden = false;
-      $('moreBtn').textContent = 'Show ' + Math.min(pageSize, list.length - slice.length) +
-        ' more (' + (list.length - slice.length) + ' left)';
-    } else { more.hidden = true; }
+    showMore(slice.length, list.length);
   }
 
   // A remembered index or sector can point at something this data.json no
@@ -1868,7 +2035,7 @@ footer b{color:var(--muted); font-weight:600}
         ' \u2014 these can still change</span>'
       : '';
     $('trackCount').textContent = String(pool);
-    $('listCount').textContent = (isPhone() && list.length > shownCount)
+    $('listCount').textContent = (list.length > shownCount)
       ? ('showing ' + Math.min(shownCount, list.length) + ' of ' + list.length)
       : (list.length + ' shown');
     if(data.missing && data.missing.length){
@@ -1890,12 +2057,16 @@ footer b{color:var(--muted); font-weight:600}
     $('cardlist').hidden = !phone;
     $('tablewrap').hidden = phone;
     if(phone){ renderCards(list); return; }
-    $('moreWrap').hidden = true;
 
     var tb = $('tbody');
-    if(!list.length){ tb.innerHTML='<tr><td colspan="16" style="padding:22px;text-align:left;color:var(--muted)">Nothing matches that filter.</td></tr>'; return; }
+    if(!list.length){ tb.innerHTML='<tr><td colspan="17" style="padding:22px;text-align:left;color:var(--muted)">Nothing matches that filter.</td></tr>'; showMore(0, 0); return; }
     var ae = document.activeElement;
     var keep = (ae && ae.classList && ae.classList.contains('cell-in')) ? ae.getAttribute('data-sym') : null;
+    // The desktop table pages too now. Seven hundred rows, each with its own
+    // sparkline, is a lot of drawing for a list you read the top of.
+    var full = list;
+    list = list.slice(0, shownCount);
+    showMore(list.length, full.length);
     tb.innerHTML = list.map(function(r){
       var chg = r.changePct;
       var tr = '<tr class="row '+(r.state==='triggered'?'fire':'')+(r.poorRR?' poorrr':'')+(openRow===r.symbol?' open':'')+'">'+
@@ -1907,8 +2078,9 @@ footer b{color:var(--muted); font-weight:600}
         '<td class="col-spark sparkcell">'+sparkline(r)+'</td>'+
         '<td class="num">'+(r.price!=null?INR.format(r.price):'—')+'</td>'+
         '<td><span class="rsi"><span class="v">'+(r.rsi!=null?r.rsi.toFixed(0):'—')+'</span>'+meter(r.rsi)+'</span></td>'+
-        '<td>'+setupBadges(r.setupTypes, r.agree)+'</td>'+
+        '<td class="setupcell">'+setupBadges(r.setupTypes, r.agree)+'</td>'+
         '<td class="num">'+volCell(r)+'</td>'+
+        '<td class="num col-deliv">'+delivCell(r)+'</td>'+
         '<td class="num '+(r.atrPct!=null&&r.atrPct>((data.settings&&data.settings.atrPctFloor)||3)?'hot':'stale')+'">'+(r.atrPct!=null?r.atrPct.toFixed(1)+'%':'—')+'</td>'+
         '<td>'+rsCell(r)+'</td>'+
         '<td><input class="cell-in num'+(r.resOverridden?' ovr':'')+'" data-sym="'+esc(r.symbol)+'" type="number" step="0.05" value="'+(r.res!=null?r.res:'')+'" aria-label="Resistance for '+esc(r.symbol)+'"></td>'+
@@ -1959,12 +2131,19 @@ footer b{color:var(--muted); font-weight:600}
     this.setAttribute('aria-expanded', String(!open));
     this.querySelector('.chev').textContent = open ? '▾' : '▴';
   });
-  $('moreBtn').addEventListener('click', function(){ shownCount += pageSize; render(); });
+  // No scroll anchoring here, deliberately. The list only grows DOWNWARD, so
+  // nothing above your eye moves; pinning the button instead would scroll you
+  // straight past the rows you just asked to see.
+  $('moreBtn').addEventListener('click', function(){
+    shownCount += pageSize; render();
+  });
   var rTimer = null, wasPhone = isPhone();
   window.addEventListener('resize', function(){
     clearTimeout(rTimer);
     rTimer = setTimeout(function(){
-      if(isPhone() !== wasPhone){ wasPhone = isPhone(); shownCount = pageSize; }
+      if(isPhone() !== wasPhone){
+        wasPhone = isPhone(); pageSize = pageFor(); shownCount = pageSize;
+      }
       render();
     }, 150);
   });
@@ -2391,7 +2570,7 @@ footer b{color:var(--muted); font-weight:600}
     $('trigZone').innerHTML = '<div class="empty">No scan results yet. Run the <b>Midcap reversal scan</b> workflow once '+
       '(Actions tab → Run workflow) and this page fills in within a couple of minutes. '+
       'It writes <code>data.json</code> next to this page.</div>';
-    $('tbody').innerHTML = '<tr><td colspan="16" style="padding:22px;text-align:left;color:var(--muted)">Waiting on the first scan.</td></tr>';
+    $('tbody').innerHTML = '<tr><td colspan="17" style="padding:22px;text-align:left;color:var(--muted)">Waiting on the first scan.</td></tr>';
   });
 })();
 </script>
