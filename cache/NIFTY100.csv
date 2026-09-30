@@ -10,6 +10,7 @@ Apollo Hospitals Enterprise Ltd.,Healthcare,APOLLOHOSP,EQ,INE437A01024
 Asian Paints Ltd.,Consumer Durables,ASIANPAINT,EQ,INE021A01026
 Avenue Supermarts Ltd.,Consumer Services,DMART,EQ,INE192R01011
 Axis Bank Ltd.,Financial Services,AXISBANK,EQ,INE238A01034
+BSE Ltd.,Financial Services,BSE,EQ,INE118H01025
 Bajaj Auto Ltd.,Automobile and Auto Components,BAJAJ-AUTO,EQ,INE917I01010
 Bajaj Finance Ltd.,Financial Services,BAJFINANCE,EQ,INE296A01032
 Bajaj Finserv Ltd.,Financial Services,BAJAJFINSV,EQ,INE918I01026
@@ -42,10 +43,10 @@ Hindalco Industries Ltd.,Metals & Mining,HINDALCO,EQ,INE038A01020
 Hindustan Aeronautics Ltd.,Capital Goods,HAL,EQ,INE066F01020
 Hindustan Unilever Ltd.,Fast Moving Consumer Goods,HINDUNILVR,EQ,INE030A01027
 Hindustan Zinc Ltd.,Metals & Mining,HINDZINC,EQ,INE267A01025
+Hitachi Energy India Ltd.,Capital Goods,POWERINDIA,EQ,INE07Y701011
 Hyundai Motor India Ltd.,Automobile and Auto Components,HYUNDAI,EQ,INE0V6F01027
 ICICI Bank Ltd.,Financial Services,ICICIBANK,EQ,INE090A01021
 ITC Ltd.,Fast Moving Consumer Goods,ITC,EQ,INE154A01025
-Indian Hotels Co. Ltd.,Consumer Services,INDHOTEL,EQ,INE053A01029
 Indian Oil Corporation Ltd.,Oil Gas & Consumable Fuels,IOC,EQ,INE242A01010
 Indian Railway Finance Corporation Ltd.,Financial Services,IRFC,EQ,INE053F01010
 Infosys Ltd.,Information Technology,INFY,EQ,INE009A01021
@@ -56,7 +57,6 @@ Jio Financial Services Ltd.,Financial Services,JIOFIN,EQ,INE758E01017
 Kotak Mahindra Bank Ltd.,Financial Services,KOTAKBANK,EQ,INE237A01036
 LTM Ltd.,Information Technology,LTM,EQ,INE214T01019
 Larsen & Toubro Ltd.,Construction,LT,EQ,INE018A01030
-Lodha Developers Ltd.,Realty,LODHA,EQ,INE670K01029
 Mahindra & Mahindra Ltd.,Automobile and Auto Components,M&M,EQ,INE101A01026
 Maruti Suzuki India Ltd.,Automobile and Auto Components,MARUTI,EQ,INE585B01010
 Max Healthcare Institute Ltd.,Healthcare,MAXHEALTH,EQ,INE027H01010
@@ -66,14 +66,13 @@ NTPC Ltd.,Power,NTPC,EQ,INE733E01010
 Nestle India Ltd.,Fast Moving Consumer Goods,NESTLEIND,EQ,INE239A01024
 Oil & Natural Gas Corporation Ltd.,Oil Gas & Consumable Fuels,ONGC,EQ,INE213A01029
 Pidilite Industries Ltd.,Chemicals,PIDILITIND,EQ,INE318A01026
+Polycab India Ltd.,Capital Goods,POLYCAB,EQ,INE455K01017
 Power Finance Corporation Ltd.,Financial Services,PFC,EQ,INE134E01011
 Power Grid Corporation of India Ltd.,Power,POWERGRID,EQ,INE752E01010
 Punjab National Bank,Financial Services,PNB,EQ,INE160A01022
-REC Ltd.,Financial Services,RECLTD,EQ,INE020B01018
 Reliance Industries Ltd.,Oil Gas & Consumable Fuels,RELIANCE,EQ,INE002A01018
 SBI Life Insurance Company Ltd.,Financial Services,SBILIFE,EQ,INE123W01016
 Samvardhana Motherson International Ltd.,Automobile and Auto Components,MOTHERSON,EQ,INE775A01035
-Shree Cement Ltd.,Construction Materials,SHREECEM,EQ,INE070A01015
 Shriram Finance Ltd.,Financial Services,SHRIRAMFIN,EQ,INE721A01047
 Siemens Energy India Ltd.,Capital Goods,ENRIN,EQ,INE1NPP01017
 Siemens Ltd.,Capital Goods,SIEMENS,EQ,INE003A01024
@@ -94,8 +93,9 @@ Torrent Pharmaceuticals Ltd.,Healthcare,TORNTPHARM,EQ,INE685A01028
 Trent Ltd.,Consumer Services,TRENT,EQ,INE849A01020
 UltraTech Cement Ltd.,Construction Materials,ULTRACEMCO,EQ,INE481G01011
 Union Bank of India,Financial Services,UNIONBANK,EQ,INE692A01016
-United Spirits Ltd.,Fast Moving Consumer Goods,UNITDSPR,EQ,INE854D01024
 Varun Beverages Ltd.,Fast Moving Consumer Goods,VBL,EQ,INE200M01039
+Vedanta Aluminium Metal Ltd.,Metals & Mining,VAML,EQ,INE1CDF01017
 Vedanta Ltd.,Metals & Mining,VEDL,EQ,INE205A01025
+Vodafone Idea Ltd.,Telecommunication,IDEA,EQ,INE669E01016
 Wipro Ltd.,Information Technology,WIPRO,EQ,INE075A01022
 Zydus Lifesciences Ltd.,Healthcare,ZYDUSLIFE,EQ,INE010B01027
