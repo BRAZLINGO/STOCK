@@ -107,7 +107,7 @@ Divergence confirmed and price has cleared the resistance.
 - **ADANIENT** (Adani Enterprises Ltd., Nifty 50) at Rs 2,816.8 -- broke 2,025.78, RSI 49.4, stop 1,757.92, qty 7
 - **APOLLOHOSP** (Apollo Hospitals Enterprise Ltd., Nifty 50, also daily) at Rs 8,133.5 -- broke 8,507.5, RSI 43.2, stop 6,928.01, qty 1
 - **ADANIPOWER** (Adani Power Ltd., Nifty Next 50, also daily) at Rs 196.21 -- broke 254.2, RSI 46.1, stop 124.82, qty 28
-- **ADANIPORTS** (Adani Ports and Special Economic Zone Ltd., Nifty 50, also daily) at Rs 1,737.8 -- broke 1,891.1, RSI 53.3, stop 1,618.25, qty 7
+- **ADANIPORTS** (Adani Ports and Special Economic Zone Ltd., Nifty 50, also daily) at Rs 1,737.8 -- broke 1,891.1, RSI 53.3, stop 1,618.0, qty 7
 - **APOLLO** (Apollo Micro Systems Ltd., Microcap 250, also daily) at Rs 394.0 -- broke 466.5, RSI 55.5, stop 352.11, qty 17
 - _...and 100 more -- see the dashboard._
 
