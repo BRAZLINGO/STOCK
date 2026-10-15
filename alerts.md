@@ -1,152 +1,152 @@
-# Midcap Reversal Desk -- 2026-10-14
+# Midcap Reversal Desk -- 2026-10-15
 
 # Daily candles
 
-## Triggered on daily (150)
+## Triggered on daily (137)
 Divergence confirmed and price has cleared the resistance.
 
-- **RELIANCE** (Reliance Industries Ltd., Nifty 50, also weekly) at Rs 1,174.6 -- broke 1,251.5, RSI 38.6, stop 1,152.2, qty 124
-- **NETWEB** (Netweb Technologies India Ltd., Smallcap 100) at Rs 5,067.7 -- broke 5,244.0, RSI 61.0, stop 4,337.22, qty 3
-- **HCLTECH** (HCL Technologies Ltd., Nifty 50) at Rs 1,327.0 -- broke 1,275.7, RSI 63.0, stop 1,162.96, qty 15
-- **BHEL** (Bharat Heavy Electricals Ltd., Midcap Select, also weekly) at Rs 464.0 -- broke 422.22, RSI 65.3, stop 404.5, qty 33
-- **SYRMA** (Syrma SGS Technology Ltd., Smallcap 100) at Rs 1,692.2 -- broke 1,813.25, RSI 53.4, stop 1,374.65, qty 7
-- **WIPRO** (Wipro Ltd., Nifty Next 50) at Rs 170.92 -- broke 178.13, RSI 58.0, stop 158.3, qty 333
-- **TECHM** (Tech Mahindra Ltd., Nifty 50) at Rs 1,575.2 -- broke 1,641.48, RSI 56.2, stop 1,486.2, qty 51
-- **BAJAJ-AUTO** (Bajaj Auto Ltd., Nifty 50) at Rs 10,250.0 -- broke 10,809.5, RSI 38.6, stop 9,637.0, qty 6
-- **HAL** (Hindustan Aeronautics Ltd., Nifty Next 50, also weekly) at Rs 4,933.0 -- broke 4,949.5, RSI 58.4, stop 4,520.58, qty 5
-- **WHIRLPOOL** (Whirlpool of India Ltd., Smallcap 250, also weekly) at Rs 847.1 -- broke 947.5, RSI 54.6, stop 740.44, qty 19
-- **JIOFIN** (Jio Financial Services Ltd., Nifty 50, also weekly) at Rs 219.0 -- broke 229.93, RSI 43.7, stop 212.31, qty 364
-- **DRREDDY** (Dr. Reddy's Laboratories Ltd., Nifty 50) at Rs 1,216.0 -- broke 1,210.31, RSI 53.9, stop 1,169.63, qty 49
-- **APOLLO** (Apollo Micro Systems Ltd., Microcap 250, also weekly) at Rs 421.7 -- broke 445.65, RSI 59.1, stop 370.01, qty 51
-- **HINDUNILVR** (Hindustan Unilever Ltd., Nifty 50, also weekly) at Rs 1,895.5 -- broke 2,037.88, RSI 47.7, stop 1,814.4, qty 29
-- **TARIL** (Transformers And Rectifiers (India) Ltd., Smallcap 250, also weekly) at Rs 349.5 -- broke 302.37, RSI 77.5, stop 280.24, qty 90
-- **VBL** (Varun Beverages Ltd., Nifty Next 50) at Rs 442.65 -- broke 470.0, RSI 57.9, stop 412.9, qty 77
-- **NESTLEIND** (Nestle India Ltd., Nifty 50, also weekly) at Rs 1,383.2 -- broke 1,384.58, RSI 54.5, stop 1,311.8, qty 57
-- **SUNTV** (Sun TV Network Ltd., Smallcap 250, also weekly) at Rs 653.1 -- broke 447.45, RSI 77.1, stop 408.01, qty 50
-- **MRPL** (Mangalore Refinery & Petrochemicals Ltd., Smallcap 100, also weekly) at Rs 185.26 -- broke 188.14, RSI 62.3, stop 176.27, qty 168
-- **TEGA** (Tega Industries Ltd., Smallcap 250, also weekly) at Rs 1,968.5 -- broke 1,993.88, RSI 52.9, stop 1,500.45, qty 5
-- **TATAELXSI** (Tata Elxsi Ltd., Smallcap 50) at Rs 3,623.1 -- broke 3,940.77, RSI 67.6, stop 2,996.0, qty 11
-- **REDINGTON** (Redington Ltd., Smallcap 50) at Rs 401.6 -- broke 418.45, RSI 56.3, stop 377.95, qty 107
-- **HDFCAMC** (HDFC Asset Management Company Ltd., Nifty Next 50, also weekly) at Rs 2,296.9 -- broke 2,382.7, RSI 42.2, stop 2,232.3, qty 33
-- **CANBK** (Canara Bank, Nifty Bank, also weekly) at Rs 124.76 -- broke 131.8, RSI 57.0, stop 117.71, qty 716
-- **ATGL** (Adani Total Gas Ltd., Midcap 100) at Rs 581.6 -- broke 605.65, RSI 43.2, stop 560.05, qty 143
-- **YESBANK** (Yes Bank Ltd., Nifty Bank, also weekly) at Rs 21.2 -- broke 23.51, RSI 44.5, stop 22.74, qty 2597
-- **ELECON** (Elecon Engineering Co. Ltd., Smallcap 250, also weekly) at Rs 486.9 -- broke 507.5, RSI 63.4, stop 396.79, qty 31
-- **LTM** (LTM Ltd., Nifty Next 50) at Rs 4,226.1 -- broke 4,392.05, RSI 53.6, stop 3,915.0, qty 11
-- **HFCL** (HFCL Ltd., Smallcap 50) at Rs 256.65 -- broke 218.87, RSI 59.1, stop 202.05, qty 37
-- **NATIONALUM** (National Aluminium Co. Ltd., Midcap 50, also weekly) at Rs 323.15 -- broke 444.82, RSI 37.2, stop 429.11, qty 127
-- _...and 120 more -- see the dashboard._
+- **RELIANCE** (Reliance Industries Ltd., Nifty 50) at Rs 1,215.0 -- broke 1,251.5, RSI 49.6, stop 1,152.2, qty 124
+- **INFY** (Infosys Ltd., Nifty 50) at Rs 1,110.0 -- broke 1,111.38, RSI 63.1, stop 1,053.03, qty 44
+- **BHARTIARTL** (Bharti Airtel Ltd., Nifty 50, also weekly) at Rs 1,854.0 -- broke 1,870.35, RSI 55.5, stop 1,756.2, qty 39
+- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 447.95 -- broke 453.2, RSI 68.8, stop 392.4, qty 36
+- **HCLTECH** (HCL Technologies Ltd., Nifty 50) at Rs 1,360.0 -- broke 1,275.7, RSI 66.9, stop 1,215.65, qty 33
+- **ITC** (ITC Ltd., Nifty 50, also weekly) at Rs 263.9 -- broke 272.97, RSI 49.5, stop 256.95, qty 408
+- **BHEL** (Bharat Heavy Electricals Ltd., Midcap Select, also weekly) at Rs 434.25 -- broke 422.22, RSI 51.2, stop 398.55, qty 84
+- **TECHM** (Tech Mahindra Ltd., Nifty 50) at Rs 1,650.0 -- broke 1,684.05, RSI 65.3, stop 1,580.24, qty 29
+- **SYRMA** (Syrma SGS Technology Ltd., Smallcap 100) at Rs 1,687.3 -- broke 1,813.25, RSI 52.8, stop 1,375.15, qty 7
+- **WIPRO** (Wipro Ltd., Nifty Next 50) at Rs 174.05 -- broke 178.13, RSI 62.1, stop 158.3, qty 333
+- **HAL** (Hindustan Aeronautics Ltd., Nifty Next 50, also weekly) at Rs 4,910.0 -- broke 5,123.65, RSI 57.0, stop 4,521.04, qty 5
+- **BAJAJ-AUTO** (Bajaj Auto Ltd., Nifty 50, also weekly) at Rs 10,385.0 -- broke 10,809.5, RSI 42.3, stop 9,637.0, qty 6
+- **JIOFIN** (Jio Financial Services Ltd., Nifty 50, also weekly) at Rs 219.01 -- broke 229.93, RSI 43.7, stop 212.31, qty 364
+- **TMCV** (Tata Motors Ltd., Nifty Next 50, also weekly) at Rs 422.8 -- broke 453.29, RSI 46.1, stop 401.05, qty 110
+- **HINDUNILVR** (Hindustan Unilever Ltd., Nifty 50, also weekly) at Rs 1,897.1 -- broke 2,037.88, RSI 48.0, stop 1,814.4, qty 29
+- **TARIL** (Transformers And Rectifiers (India) Ltd., Smallcap 250, also weekly) at Rs 333.45 -- broke 302.37, RSI 67.1, stop 278.96, qty 85
+- **APOLLO** (Apollo Micro Systems Ltd., Microcap 250, also weekly) at Rs 417.1 -- broke 445.65, RSI 56.9, stop 370.02, qty 51
+- **INDUSINDBK** (IndusInd Bank Ltd., Nifty Bank) at Rs 885.4 -- broke 959.71, RSI 41.9, stop 845.7, qty 58
+- **SUNTV** (Sun TV Network Ltd., Smallcap 250, also weekly) at Rs 629.15 -- broke 447.45, RSI 67.6, stop 405.21, qty 47
+- **TATAELXSI** (Tata Elxsi Ltd., Smallcap 50) at Rs 3,700.0 -- broke 3,845.67, RSI 70.2, stop 2,996.0, qty 11
+- **HDFCAMC** (HDFC Asset Management Company Ltd., Nifty Next 50, also weekly) at Rs 2,415.0 -- broke 2,462.5, RSI 54.2, stop 2,232.3, qty 33
+- **PATANJALI** (Patanjali Foods Ltd., Midcap 100) at Rs 365.65 -- broke 411.22, RSI 50.2, stop 328.19, qty 53
+- **ELECON** (Elecon Engineering Co. Ltd., Smallcap 250, also weekly) at Rs 493.05 -- broke 507.5, RSI 64.6, stop 407.2, qty 55
+- **TEGA** (Tega Industries Ltd., Smallcap 250, also weekly) at Rs 1,888.7 -- broke 1,993.88, RSI 47.1, stop 1,500.56, qty 5
+- **GALLANTT** (Gallantt Ispat Ltd., Smallcap 100, also weekly) at Rs 628.15 -- broke 591.41, RSI 66.6, stop 545.52, qty 43
+- **LTM** (LTM Ltd., Nifty Next 50) at Rs 4,235.0 -- broke 4,392.05, RSI 54.1, stop 3,915.0, qty 11
+- **ATGL** (Adani Total Gas Ltd., Midcap 100, also weekly) at Rs 576.8 -- broke 685.38, RSI 41.5, stop 560.05, qty 143
+- **HFCL** (HFCL Ltd., Smallcap 50) at Rs 243.82 -- broke 218.87, RSI 51.9, stop 200.41, qty 108
+- **AUBANK** (AU Small Finance Bank Ltd., Nifty Bank, also weekly) at Rs 1,002.7 -- broke 1,039.99, RSI 45.9, stop 1,105.38, qty 51
+- **CPPLUS** (Aditya Infotech Ltd., Smallcap 250) at Rs 4,109.1 -- broke 4,620.0, RSI 56.6, stop 3,194.19, qty 2
+- _...and 107 more -- see the dashboard._
 
-## Armed on daily, within 20% of the trigger (472)
+## Armed on daily, within 20% of the trigger (485)
 Closest to the resistance break first.
 
-- **BLS** (Smallcap 250, also weekly) at Rs 220.09 -- needs 0.01% to clear 220.12 (RSI 42.0)
-- **UNOMINDA** (Midcap 150) at Rs 1,104.0 -- needs 0.02% to clear 1,104.27 (RSI 37.0)
-- **AEGISVOPAK** (Smallcap 250) at Rs 282.4 -- needs 0.03% to clear 282.48 (RSI 43.9)
-- **DIACABS** (Microcap 250) at Rs 378.75 -- needs 0.07% to clear 379.0 (RSI 59.3)
-- **PETRONET** (Midcap 150) at Rs 292.95 -- needs 0.14% to clear 293.35 (RSI 54.9)
-- **HEROMOTOCO** (Midcap Select, also weekly) at Rs 5,019.5 -- needs 0.16% to clear 5,027.32 (RSI 40.5)
-- **KPRMILL** (Midcap 150, also weekly) at Rs 1,121.2 -- needs 0.2% to clear 1,123.4 (RSI 54.1)
-- **CYIENT** (Smallcap 250, also weekly) at Rs 1,195.4 -- needs 0.23% to clear 1,198.12 (RSI 67.3)
-- **ENDURANCE** (Midcap 150, also weekly) at Rs 2,421.5 -- needs 0.23% to clear 2,426.95 (RSI 26.5)
-- **LICHSGFIN** (Midcap 100, also weekly) at Rs 535.0 -- needs 0.24% to clear 536.29 (RSI 47.8)
-- **OBEROIRLTY** (Midcap 100, also weekly) at Rs 1,706.0 -- needs 0.26% to clear 1,710.5 (RSI 40.1)
-- **PNBHOUSING** (Smallcap 50, also weekly) at Rs 1,200.0 -- needs 0.27% to clear 1,203.25 (RSI 61.1)
-- **HOMEFIRST** (Smallcap 250, also weekly) at Rs 1,104.3 -- needs 0.27% to clear 1,107.28 (RSI 43.0)
-- **IKS** (Smallcap 100, also weekly) at Rs 1,729.6 -- needs 0.3% to clear 1,734.77 (RSI 44.4)
-- **CCL** (Smallcap 250) at Rs 1,100.6 -- needs 0.31% to clear 1,104.05 (RSI 60.7)
-- **CENTRALBK** (Smallcap 250, also weekly) at Rs 31.18 -- needs 0.32% to clear 31.28 (RSI 56.7)
-- **ATUL** (Smallcap 250, also weekly) at Rs 5,972.0 -- needs 0.38% to clear 5,994.6 (RSI 41.9)
-- **FLUOROCHEM** (Midcap 150, also weekly) at Rs 4,632.1 -- needs 0.39% to clear 4,650.05 (RSI 56.0)
-- **ABREL** (Smallcap 250) at Rs 1,079.9 -- needs 0.39% to clear 1,084.1 (RSI 34.4)
-- **GODREJCP** (Nifty Next 50) at Rs 871.3 -- needs 0.4% to clear 874.75 (RSI 47.9)
-- **APOLLOHOSP** (Nifty 50, also weekly) at Rs 7,824.0 -- needs 0.42% to clear 7,856.75 (RSI 34.9)
-- **GENUSPOWER** (Microcap 250, also weekly) at Rs 294.5 -- needs 0.43% to clear 295.78 (RSI 43.8)
-- **VIJAYA** (Smallcap 250) at Rs 1,402.2 -- needs 0.48% to clear 1,408.9 (RSI 39.8)
-- **BAJAJFINSV** (Nifty 50) at Rs 1,721.7 -- needs 0.49% to clear 1,730.1 (RSI 35.2)
-- **DYNAMATECH** (Microcap 250) at Rs 14,424.0 -- needs 0.51% to clear 14,498.0 (RSI 70.0)
-- **SBFC** (Microcap 250, also weekly) at Rs 88.99 -- needs 0.51% to clear 89.44 (RSI 50.5)
-- **GRASIM** (Nifty 50) at Rs 2,873.0 -- needs 0.53% to clear 2,888.27 (RSI 31.4)
-- **BHARATFORG** (Midcap Select) at Rs 1,838.8 -- needs 0.54% to clear 1,848.76 (RSI 39.2)
-- **PARADEEP** (Smallcap 250) at Rs 144.26 -- needs 0.54% to clear 145.04 (RSI 38.6)
-- **ANGELONE** (Smallcap 50, also weekly) at Rs 306.05 -- needs 0.61% to clear 307.93 (RSI 57.9)
-- _...and 442 more within 20%._
+- **KALYANKJIL** (Midcap 100, also weekly) at Rs 558.85 -- needs 0.01% to clear 558.88 (RSI 45.7)
+- **VMART** (Microcap 250, also weekly) at Rs 802.25 -- needs 0.02% to clear 802.45 (RSI 50.8)
+- **CLEANMAX** (Smallcap 250) at Rs 1,255.5 -- needs 0.06% to clear 1,256.27 (RSI 40.9)
+- **ELECTCAST** (Microcap 250, also weekly) at Rs 76.32 -- needs 0.09% to clear 76.39 (RSI 50.8)
+- **GUJALKALI** (Microcap 250, also weekly) at Rs 589.2 -- needs 0.1% to clear 589.76 (RSI 35.2)
+- **GRWRHITECH** (Microcap 250) at Rs 7,094.5 -- needs 0.11% to clear 7,102.38 (RSI 54.9)
+- **MPHASIS** (Midcap 100, also weekly) at Rs 2,453.2 -- needs 0.17% to clear 2,457.3 (RSI 63.3)
+- **DEVYANI** (Smallcap 100, also weekly) at Rs 121.57 -- needs 0.2% to clear 121.81 (RSI 30.8)
+- **AEGISVOPAK** (Smallcap 250) at Rs 281.9 -- needs 0.21% to clear 282.48 (RSI 43.5)
+- **BHARATCOAL** (Smallcap 100) at Rs 31.96 -- needs 0.22% to clear 32.03 (RSI 46.8)
+- **VAIBHAVGBL** (Microcap 250, also weekly) at Rs 202.87 -- needs 0.23% to clear 203.33 (RSI 41.9)
+- **BEL** (Nifty 50, also weekly) at Rs 380.4 -- needs 0.24% to clear 381.33 (RSI 43.4)
+- **SURYAROSNI** (Microcap 250, also weekly) at Rs 212.52 -- needs 0.25% to clear 213.06 (RSI 44.5)
+- **FEDERALBNK** (Nifty Bank) at Rs 335.0 -- needs 0.28% to clear 335.95 (RSI 53.7)
+- **MEDANTA** (Midcap 150, also weekly) at Rs 1,275.5 -- needs 0.29% to clear 1,279.23 (RSI 32.9)
+- **CENTRALBK** (Smallcap 250, also weekly) at Rs 30.78 -- needs 0.29% to clear 30.87 (RSI 51.7)
+- **BSE** (Nifty 50) at Rs 3,428.0 -- needs 0.3% to clear 3,438.33 (RSI 57.9)
+- **SHAREINDIA** (Microcap 250, also weekly) at Rs 193.42 -- needs 0.35% to clear 194.09 (RSI 47.6)
+- **THOMASCOOK** (Microcap 250, also weekly) at Rs 100.4 -- needs 0.37% to clear 100.77 (RSI 44.3)
+- **AIAENG** (Midcap 150) at Rs 3,679.3 -- needs 0.45% to clear 3,695.72 (RSI 28.9)
+- **ANANDRATHI** (Smallcap 50) at Rs 2,142.6 -- needs 0.46% to clear 2,152.48 (RSI 50.7)
+- **SUMICHEM** (Smallcap 250, also weekly) at Rs 404.85 -- needs 0.46% to clear 406.7 (RSI 26.7)
+- **WOCKPHARMA** (Smallcap 50, also weekly) at Rs 1,949.4 -- needs 0.47% to clear 1,958.65 (RSI 40.3)
+- **ASHOKLEY** (Midcap Select, also weekly) at Rs 148.18 -- needs 0.47% to clear 148.88 (RSI 39.3)
+- **DALBHARAT** (Midcap 150, also weekly) at Rs 1,610.0 -- needs 0.47% to clear 1,617.55 (RSI 37.7)
+- **GRANULES** (Smallcap 250) at Rs 811.95 -- needs 0.48% to clear 815.88 (RSI 42.0)
+- **QPOWER** (Microcap 250) at Rs 1,433.8 -- needs 0.5% to clear 1,441.0 (RSI 42.9)
+- **NTPC** (Nifty 50, also weekly) at Rs 314.65 -- needs 0.51% to clear 316.27 (RSI 40.1)
+- **EMBASSY** (Midcap 150, also weekly) at Rs 434.91 -- needs 0.51% to clear 437.14 (RSI 49.4)
+- **GMDCLTD** (Smallcap 100) at Rs 467.5 -- needs 0.55% to clear 470.05 (RSI 28.9)
+- _...and 455 more within 20%._
 
-_24 more armed on daily sit further than 20% below their resistance._
+_30 more armed on daily sit further than 20% below their resistance._
 
 # Weekly candles — the current weekly candle is still forming, so these can change
 
-## Triggered on weekly (151)
+## Triggered on weekly (141)
 Divergence confirmed and price has cleared the resistance.
 
-- **NETWEB** (Netweb Technologies India Ltd., Smallcap 100) at Rs 5,067.7 -- broke 5,244.0, RSI 58.9, stop 2,895.24, qty 0
-- **BHEL** (Bharat Heavy Electricals Ltd., Midcap Select, also daily) at Rs 464.0 -- broke 245.23, RSI 69.2, stop 201.84, qty 46
-- **TECHM** (Tech Mahindra Ltd., Nifty 50) at Rs 1,575.2 -- broke 1,709.7, RSI 54.2, stop 1,281.72, qty 8
-- **BAJAJ-AUTO** (Bajaj Auto Ltd., Nifty 50) at Rs 10,250.0 -- broke 12,622.0, RSI 45.4, stop 8,360.26, qty 1
-- **HAL** (Hindustan Aeronautics Ltd., Nifty Next 50, also daily) at Rs 4,933.0 -- broke 4,809.82, RSI 59.9, stop 4,088.09, qty 2
-- **APOLLO** (Apollo Micro Systems Ltd., Microcap 250, also daily) at Rs 421.7 -- broke 427.95, RSI 59.7, stop 352.1, qty 17
-- **HINDUNILVR** (Hindustan Unilever Ltd., Nifty 50, also daily) at Rs 1,895.5 -- broke 2,436.86, RSI 32.6, stop 1,826.9, qty 29
-- **TARIL** (Transformers And Rectifiers (India) Ltd., Smallcap 250, also daily) at Rs 349.5 -- broke 352.84, RSI 61.5, stop 216.67, qty 15
-- **NESTLEIND** (Nestle India Ltd., Nifty 50, also daily) at Rs 1,383.2 -- broke 1,498.1, RSI 49.5, stop 1,292.9, qty 37
-- **SUNTV** (Sun TV Network Ltd., Smallcap 250, also daily) at Rs 653.1 -- broke 655.2, RSI 69.3, stop 447.2, qty 26
-- **MRPL** (Mangalore Refinery & Petrochemicals Ltd., Smallcap 100, also daily) at Rs 185.26 -- broke 188.45, RSI 60.2, stop 161.5, qty 103
-- **TEGA** (Tega Industries Ltd., Smallcap 250, also daily) at Rs 1,968.5 -- broke 2,125.0, RSI 58.3, stop 1,430.52, qty 4
-- **REDINGTON** (Redington Ltd., Smallcap 50) at Rs 401.6 -- broke 419.5, RSI 68.8, stop 169.42, qty 12
-- **CANBK** (Canara Bank, Nifty Bank, also daily) at Rs 124.76 -- broke 128.9, RSI 45.6, stop 116.51, qty 449
-- **ELECON** (Elecon Engineering Co. Ltd., Smallcap 250, also daily) at Rs 486.9 -- broke 549.1, RSI 54.5, stop 412.6, qty 31
-- **PNB** (Punjab National Bank, Nifty Bank, also daily) at Rs 118.5 -- broke 119.5, RSI 57.0, stop 98.44, qty 116
-- **GRAPHITE** (Graphite India Ltd., Smallcap 250, also daily) at Rs 805.45 -- broke 874.35, RSI 62.7, stop 542.34, qty 7
-- **GLAND** (Gland Pharma Ltd., Smallcap 50) at Rs 3,052.3 -- broke 3,120.0, RSI 72.6, stop 1,719.35, qty 7
-- **PVRINOX** (PVR INOX Ltd., Smallcap 250) at Rs 1,381.0 -- broke 1,748.0, RSI 72.1, stop 910.76, qty 5
-- **HEXT** (Hexaware Technologies Ltd., Midcap 150) at Rs 570.35 -- broke 651.02, RSI 55.2, stop 496.0, qty 62
-- **CARTRADE** (Cartrade Tech Ltd., Smallcap 250, also daily) at Rs 3,151.5 -- broke 1,864.78, RSI 65.3, stop 1,475.86, qty 5
-- **GABRIEL** (Gabriel India Ltd., Smallcap 250, also daily) at Rs 1,420.3 -- broke 1,600.0, RSI 62.1, stop 1,240.95, qty 5
-- **FINCABLES** (Finolex Cables Ltd., Smallcap 250) at Rs 1,446.3 -- broke 1,559.0, RSI 66.9, stop 927.72, qty 7
-- **ABDL** (Allied Blenders and Distillers Ltd., Smallcap 250) at Rs 743.45 -- broke 753.8, RSI 68.9, stop 580.0, qty 26
-- **BALRAMCHIN** (Balrampur Chini Mills Ltd., Smallcap 250, also daily) at Rs 713.85 -- broke 527.0, RSI 65.4, stop 404.75, qty 8
-- **RRKABEL** (R R Kabel Ltd., Smallcap 100) at Rs 2,664.1 -- broke 2,983.8, RSI 62.6, stop 1,274.42, qty 6
-- **RAIN** (Rain Industries Ltd, Microcap 250) at Rs 237.08 -- broke 252.0, RSI 67.3, stop 191.04, qty 51
-- **SCI** (Shipping Corporation of India Ltd., Smallcap 250, also daily) at Rs 289.0 -- broke 320.0, RSI 52.7, stop 189.95, qty 22
-- **SOUTHBANK** (South Indian Bank Ltd., Microcap 250) at Rs 49.64 -- broke 49.9, RSI 62.4, stop 41.31, qty 427
-- **AXISCADES** (AXISCADES Technologies Ltd., Microcap 250, also daily) at Rs 2,090.6 -- broke 2,211.0, RSI 61.4, stop 1,010.82, qty 2
-- _...and 121 more -- see the dashboard._
+- **INFY** (Infosys Ltd., Nifty 50) at Rs 1,110.0 -- broke 1,190.15, RSI 47.3, stop 980.4, qty 36
+- **BHARTIARTL** (Bharti Airtel Ltd., Nifty 50, also daily) at Rs 1,854.0 -- broke 1,846.9, RSI 48.4, stop 1,716.48, qty 15
+- **BHEL** (Bharat Heavy Electricals Ltd., Midcap Select, also daily) at Rs 434.25 -- broke 245.23, RSI 63.4, stop 201.84, qty 46
+- **TECHM** (Tech Mahindra Ltd., Nifty 50) at Rs 1,650.0 -- broke 1,709.7, RSI 59.6, stop 1,442.5, qty 9
+- **HAL** (Hindustan Aeronautics Ltd., Nifty Next 50, also daily) at Rs 4,910.0 -- broke 4,809.82, RSI 59.3, stop 4,088.05, qty 2
+- **BAJAJ-AUTO** (Bajaj Auto Ltd., Nifty 50, also daily) at Rs 10,385.0 -- broke 12,622.0, RSI 47.1, stop 8,360.26, qty 1
+- **HINDUNILVR** (Hindustan Unilever Ltd., Nifty 50, also daily) at Rs 1,897.1 -- broke 2,436.86, RSI 32.8, stop 1,826.9, qty 29
+- **APOLLO** (Apollo Micro Systems Ltd., Microcap 250, also daily) at Rs 417.1 -- broke 427.95, RSI 59.0, stop 352.08, qty 17
+- **SUNTV** (Sun TV Network Ltd., Smallcap 250, also daily) at Rs 629.15 -- broke 655.2, RSI 66.2, stop 447.2, qty 26
+- **ELECON** (Elecon Engineering Co. Ltd., Smallcap 250, also daily) at Rs 493.05 -- broke 549.1, RSI 55.3, stop 412.6, qty 31
+- **ANGELONE** (Angel One Ltd., Smallcap 50, also daily) at Rs 313.0 -- broke 340.3, RSI 54.8, stop 202.78, qty 23
+- **GRAPHITE** (Graphite India Ltd., Smallcap 250, also daily) at Rs 767.2 -- broke 802.4, RSI 56.6, stop 542.06, qty 9
+- **GLAND** (Gland Pharma Ltd., Smallcap 50) at Rs 3,066.3 -- broke 3,120.0, RSI 73.3, stop 1,716.68, qty 7
+- **HEXT** (Hexaware Technologies Ltd., Midcap 150) at Rs 575.8 -- broke 651.02, RSI 55.9, stop 496.0, qty 62
+- **MOTILALOFS** (Motilal Oswal Financial Services Ltd., Midcap 100, also daily) at Rs 1,062.95 -- broke 1,065.37, RSI 64.4, stop 997.7, qty 20
+- **GABRIEL** (Gabriel India Ltd., Smallcap 250, also daily) at Rs 1,432.3 -- broke 1,600.0, RSI 62.7, stop 1,240.77, qty 5
+- **ABDL** (Allied Blenders and Distillers Ltd., Smallcap 250) at Rs 739.25 -- broke 766.9, RSI 68.5, stop 580.0, qty 26
+- **BALRAMCHIN** (Balrampur Chini Mills Ltd., Smallcap 250, also daily) at Rs 726.0 -- broke 527.0, RSI 66.5, stop 404.75, qty 8
+- **RRKABEL** (R R Kabel Ltd., Smallcap 100) at Rs 2,603.9 -- broke 2,983.8, RSI 60.1, stop 1,271.09, qty 6
+- **SCI** (Shipping Corporation of India Ltd., Smallcap 250, also daily) at Rs 284.0 -- broke 320.0, RSI 51.0, stop 189.95, qty 22
+- **SHYAMMETL** (Shyam Metalics and Energy Ltd., Smallcap 250) at Rs 1,157.0 -- broke 1,166.0, RSI 68.1, stop 729.32, qty 5
+- **AXISCADES** (AXISCADES Technologies Ltd., Microcap 250, also daily) at Rs 2,020.5 -- broke 2,211.0, RSI 58.7, stop 1,010.82, qty 2
+- **NEOGEN** (NEOGEN CHEMICALS LTD., Microcap 250) at Rs 2,507.6 -- broke 1,509.15, RSI 69.5, stop 1,190.43, qty 6
+- **AWL** (AWL Agri Business Ltd., Smallcap 250, also daily) at Rs 190.54 -- broke 250.45, RSI 48.9, stop 180.47, qty 274
+- **IRCTC** (Indian Railway Catering And Tourism Corporation Ltd., Midcap 100, also daily) at Rs 469.35 -- broke 557.05, RSI 38.2, stop 446.8, qty 111
+- **BHARTIHEXA** (Bharti Hexacom Ltd., Midcap 150) at Rs 1,650.5 -- broke 1,870.2, RSI 56.6, stop 1,359.2, qty 11
+- **ECLERX** (eClerx Services Ltd., Smallcap 250, also daily) at Rs 1,998.2 -- broke 1,687.25, RSI 58.8, stop 1,430.02, qty 7
+- **CHOICEIN** (Choice International Ltd., Smallcap 250) at Rs 736.0 -- broke 747.1, RSI 47.3, stop 791.84, qty 29
+- **DCBBANK** (DCB Bank Ltd., Microcap 250) at Rs 210.79 -- broke 234.8, RSI 58.6, stop 165.67, qty 51
+- **PGIL** (Pearl Global Industries Ltd., Microcap 250) at Rs 1,263.3 -- broke 1,269.8, RSI 64.9, stop 687.61, qty 4
+- _...and 111 more -- see the dashboard._
 
-## Armed on weekly, within 20% of the trigger (294)
+## Armed on weekly, within 20% of the trigger (307)
 Closest to the resistance break first.
 
-- **POWERINDIA** (Nifty Next 50) at Rs 30,390.0 -- needs 0.03% to clear 30,400.0 (RSI 48.0)
-- **OIL** (Midcap 50, also daily) at Rs 447.75 -- needs 0.04% to clear 447.92 (RSI 46.5)
-- **SARDAEN** (Smallcap 250, also daily) at Rs 482.5 -- needs 0.07% to clear 482.85 (RSI 41.9)
-- **METROPOLIS** (Microcap 250) at Rs 525.4 -- needs 0.08% to clear 525.8 (RSI 45.7)
-- **ASTRAL** (Midcap 100, also daily) at Rs 1,443.2 -- needs 0.15% to clear 1,445.34 (RSI 47.9)
-- **CENTRALBK** (Smallcap 250, also daily) at Rs 31.18 -- needs 0.22% to clear 31.25 (RSI 44.8)
-- **LUMAXIND** (Microcap 250, also daily) at Rs 5,346.0 -- needs 0.22% to clear 5,358.0 (RSI 46.5)
-- **HINDCOPPER** (Midcap 100) at Rs 467.65 -- needs 0.29% to clear 469.0 (RSI 42.4)
-- **MRF** (Midcap 100) at Rs 122,365.0 -- needs 0.3% to clear 122,727.5 (RSI 35.1)
-- **KEI** (Midcap 100, also daily) at Rs 4,648.0 -- needs 0.33% to clear 4,663.52 (RSI 44.8)
-- **DMART** (Nifty Next 50, also daily) at Rs 3,415.0 -- needs 0.34% to clear 3,426.57 (RSI 33.7)
-- **PAISALO** (Microcap 250) at Rs 81.71 -- needs 0.35% to clear 82.0 (RSI 67.5)
-- **BLS** (Smallcap 250, also daily) at Rs 220.09 -- needs 0.43% to clear 221.04 (RSI 37.6)
-- **GPIL** (Smallcap 100, also daily) at Rs 209.09 -- needs 0.47% to clear 210.07 (RSI 29.9)
-- **GESHIP** (Smallcap 50, also daily) at Rs 1,543.1 -- needs 0.48% to clear 1,550.53 (RSI 61.2)
-- **NH** (Midcap 150, also daily) at Rs 1,689.4 -- needs 0.52% to clear 1,698.17 (RSI 39.1)
-- **KSB** (Smallcap 250, also daily) at Rs 785.8 -- needs 0.6% to clear 790.48 (RSI 42.7)
-- **SUDARSCHEM** (Microcap 250) at Rs 1,144.0 -- needs 0.69% to clear 1,151.95 (RSI 54.8)
-- **NMDC** (Midcap 50, also daily) at Rs 71.08 -- needs 0.84% to clear 71.68 (RSI 30.1)
-- **CAPLIPOINT** (Smallcap 250, also daily) at Rs 2,338.2 -- needs 0.85% to clear 2,358.13 (RSI 47.4)
-- **MEDANTA** (Midcap 150, also daily) at Rs 1,280.0 -- needs 0.9% to clear 1,291.55 (RSI 44.8)
-- **JSWINFRA** (Midcap 150) at Rs 341.8 -- needs 0.94% to clear 345.01 (RSI 58.1)
-- **VMM** (Midcap 50, also daily) at Rs 96.0 -- needs 1.06% to clear 97.02 (RSI 30.2)
-- **ANURAS** (Smallcap 250, also daily) at Rs 1,187.0 -- needs 1.14% to clear 1,200.56 (RSI 43.3)
-- **GOLDIAM** (Microcap 250, also daily) at Rs 311.85 -- needs 1.18% to clear 315.53 (RSI 46.3)
-- **ONGC** (Nifty 50, also daily) at Rs 225.5 -- needs 1.21% to clear 228.23 (RSI 37.4)
-- **INDIACEM** (Smallcap 250) at Rs 295.65 -- needs 1.26% to clear 299.37 (RSI 26.3)
-- **ICICIBANK** (Nifty Bank) at Rs 1,338.6 -- needs 1.33% to clear 1,356.4 (RSI 45.9)
-- **NIVABUPA** (Microcap 250, also daily) at Rs 78.59 -- needs 1.35% to clear 79.65 (RSI 46.2)
-- **CYIENT** (Smallcap 250, also daily) at Rs 1,195.4 -- needs 1.36% to clear 1,211.67 (RSI 71.3)
-- _...and 264 more within 20%._
+- **ASTRAL** (Midcap 100, also daily) at Rs 1,443.3 -- needs 0.14% to clear 1,445.34 (RSI 47.9)
+- **ASHAPURMIN** (Microcap 250) at Rs 465.0 -- needs 0.2% to clear 465.95 (RSI 31.9)
+- **NAVA** (Smallcap 250, also daily) at Rs 541.25 -- needs 0.23% to clear 542.49 (RSI 41.8)
+- **BEL** (Nifty 50, also daily) at Rs 380.4 -- needs 0.24% to clear 381.33 (RSI 40.6)
+- **FIEMIND** (Microcap 250) at Rs 1,825.5 -- needs 0.28% to clear 1,830.65 (RSI 36.4)
+- **SBFC** (Microcap 250, also daily) at Rs 87.64 -- needs 0.29% to clear 87.89 (RSI 43.4)
+- **PRIVISCL** (Smallcap 250) at Rs 3,365.1 -- needs 0.32% to clear 3,375.87 (RSI 48.9)
+- **GVT&D** (Midcap Select) at Rs 3,949.0 -- needs 0.33% to clear 3,962.2 (RSI 43.7)
+- **MRF** (Midcap 100) at Rs 122,270.0 -- needs 0.37% to clear 122,727.5 (RSI 34.9)
+- **GLAXO** (Midcap 150) at Rs 2,524.7 -- needs 0.53% to clear 2,537.97 (RSI 46.0)
+- **AXISBANK** (Nifty Bank, also daily) at Rs 1,288.0 -- needs 0.56% to clear 1,295.22 (RSI 53.1)
+- **OIL** (Midcap 50, also daily) at Rs 445.4 -- needs 0.57% to clear 447.92 (RSI 45.8)
+- **SUDARSCHEM** (Microcap 250) at Rs 1,144.6 -- needs 0.64% to clear 1,151.95 (RSI 54.9)
+- **INDIACEM** (Smallcap 250) at Rs 297.4 -- needs 0.66% to clear 299.37 (RSI 26.6)
+- **TRITURBINE** (Smallcap 100, also daily) at Rs 506.1 -- needs 0.68% to clear 509.52 (RSI 35.1)
+- **VMM** (Midcap 50, also daily) at Rs 96.25 -- needs 0.8% to clear 97.02 (RSI 30.4)
+- **KOTAKBANK** (Nifty Bank) at Rs 447.95 -- needs 0.89% to clear 451.93 (RSI 66.4)
+- **GODFRYPHLP** (Midcap 100, also daily) at Rs 1,837.5 -- needs 0.94% to clear 1,854.7 (RSI 36.3)
+- **HINDCOPPER** (Midcap 100, also daily) at Rs 453.05 -- needs 0.95% to clear 457.35 (RSI 40.0)
+- **IOC** (Nifty Next 50, also daily) at Rs 128.83 -- needs 0.97% to clear 130.08 (RSI 37.8)
+- **GODREJIND** (Midcap 150, also daily) at Rs 1,030.5 -- needs 1.01% to clear 1,040.95 (RSI 42.3)
+- **EMAMILTD** (Smallcap 250) at Rs 373.6 -- needs 1.04% to clear 377.49 (RSI 39.9)
+- **SUNFLAG** (Microcap 250) at Rs 423.45 -- needs 1.07% to clear 428.0 (RSI 65.9)
+- **TEGA** (Smallcap 250, also daily) at Rs 1,888.7 -- needs 1.08% to clear 1,909.12 (RSI 54.8)
+- **PAISALO** (Microcap 250) at Rs 81.08 -- needs 1.13% to clear 82.0 (RSI 67.0)
+- **NMDC** (Midcap 50) at Rs 70.82 -- needs 1.21% to clear 71.68 (RSI 29.8)
+- **BAJFINANCE** (Nifty 50) at Rs 965.25 -- needs 1.22% to clear 977.0 (RSI 45.5)
+- **URBANCO** (Smallcap 100, also daily) at Rs 154.31 -- needs 1.22% to clear 156.19 (RSI 53.4)
+- **HEROMOTOCO** (Midcap Select, also daily) at Rs 5,210.0 -- needs 1.26% to clear 5,275.5 (RSI 49.2)
+- **NTPC** (Nifty 50, also daily) at Rs 314.65 -- needs 1.26% to clear 318.62 (RSI 32.7)
+- _...and 277 more within 20%._
 
-_169 more armed on weekly sit further than 20% below their resistance._
+_173 more armed on weekly sit further than 20% below their resistance._
 
 
 _No data for: BAGMANE, DUMMYHEG, DUMMYINGL1, DUMMYINGL2, DUMMYINXGN_
