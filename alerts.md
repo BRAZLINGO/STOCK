@@ -48,6 +48,7 @@ Closest to the resistance break first.
 - **KOTAKBANK** (Nifty Bank) at Rs 442.3 -- needs 0.23% to clear 443.3 (RSI 62.9)
 - **PINELABS** (Smallcap 100) at Rs 163.79 -- needs 0.24% to clear 164.19 (RSI 43.2)
 - **NEOGEN** (Microcap 250) at Rs 2,481.8 -- needs 0.24% to clear 2,487.87 (RSI 54.6)
+- **EMBASSY** (Midcap 150, also weekly) at Rs 435.93 -- needs 0.28% to clear 437.14 (RSI 51.1)
 - **GVT&D** (Midcap Select) at Rs 3,925.0 -- needs 0.31% to clear 3,937.04 (RSI 33.6)
 - **TBOTEK** (Smallcap 250, also weekly) at Rs 1,613.6 -- needs 0.31% to clear 1,618.67 (RSI 41.0)
 - **RAINBOW** (Smallcap 250, also weekly) at Rs 1,236.0 -- needs 0.31% to clear 1,239.8 (RSI 32.0)
@@ -55,7 +56,6 @@ Closest to the resistance break first.
 - **GLAND** (Smallcap 50) at Rs 3,019.8 -- needs 0.34% to clear 3,029.93 (RSI 54.0)
 - **AKUMS** (Microcap 250) at Rs 709.55 -- needs 0.36% to clear 712.1 (RSI 33.8)
 - **FEDERALBNK** (Nifty Bank) at Rs 348.85 -- needs 0.4% to clear 350.25 (RSI 64.4)
-- **EMBASSY** (Midcap 150, also weekly) at Rs 435.4 -- needs 0.4% to clear 437.14 (RSI 50.2)
 - **IOC** (Nifty Next 50, also weekly) at Rs 130.25 -- needs 0.44% to clear 130.82 (RSI 46.0)
 - **EQUITASBNK** (Microcap 250, also weekly) at Rs 70.04 -- needs 0.5% to clear 70.39 (RSI 50.8)
 - **PARADEEP** (Smallcap 250) at Rs 144.26 -- needs 0.54% to clear 145.04 (RSI 40.0)
@@ -119,7 +119,6 @@ Closest to the resistance break first.
 - **CUMMINSIND** (Nifty Next 50) at Rs 4,612.0 -- needs 0.07% to clear 4,615.0 (RSI 35.6)
 - **CHOLAHLDNG** (Smallcap 100, also daily) at Rs 1,362.8 -- needs 0.07% to clear 1,363.74 (RSI 37.3)
 - **GRINDWELL** (Microcap 250, also daily) at Rs 1,826.8 -- needs 0.16% to clear 1,829.77 (RSI 44.5)
-- **BIRET** (Smallcap 250, also daily) at Rs 319.98 -- needs 0.19% to clear 320.58 (RSI 36.4)
 - **GRAPHITE** (Smallcap 250, also daily) at Rs 745.5 -- needs 0.2% to clear 747.0 (RSI 53.4)
 - **ENDURANCE** (Midcap 150, also daily) at Rs 2,368.8 -- needs 0.24% to clear 2,374.59 (RSI 38.1)
 - **HUDCO** (Midcap 150) at Rs 156.31 -- needs 0.31% to clear 156.8 (RSI 28.9)
@@ -144,6 +143,7 @@ Closest to the resistance break first.
 - **BEL** (Nifty 50, also daily) at Rs 377.2 -- needs 1.09% to clear 381.33 (RSI 39.1)
 - **CIPLA** (Nifty 50) at Rs 1,324.1 -- needs 1.16% to clear 1,339.45 (RSI 41.4)
 - **ASTERDM** (Midcap 150) at Rs 667.15 -- needs 1.18% to clear 675.0 (RSI 39.1)
+- **ASTRAL** (Midcap 100, also daily) at Rs 1,428.0 -- needs 1.21% to clear 1,445.34 (RSI 46.6)
 - _...and 277 more within 20%._
 
 _189 more armed on weekly sit further than 20% below their resistance._
