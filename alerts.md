@@ -2,19 +2,19 @@
 
 # Daily candles
 
-## Triggered on daily (93)
+## Triggered on daily (94)
 Divergence confirmed and price has cleared the resistance.
 
 - **BHARTIARTL** (Bharti Airtel Ltd., Nifty 50, also weekly) at Rs 1,973.7 -- broke 1,882.29, RSI 65.4, stop 1,817.03, qty 30
 - **BSE** (BSE Ltd., Nifty 50) at Rs 3,510.4 -- broke 3,441.66, RSI 61.3, stop 3,106.06, qty 5
 - **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 461.6 -- broke 462.9, RSI 69.1, stop 425.23, qty 56
-- **ETERNAL** (Eternal Ltd., Nifty 50, also weekly) at Rs 343.65 -- broke 332.95, RSI 62.2, stop 299.49, qty 42
+- **ETERNAL** (Eternal Ltd., Nifty 50, also weekly) at Rs 343.65 -- broke 332.95, RSI 62.2, stop 299.5, qty 42
 - **TECHM** (Tech Mahindra Ltd., Nifty 50) at Rs 1,790.8 -- broke 1,655.67, RSI 65.8, stop 1,575.5, qty 24
 - **HCLTECH** (HCL Technologies Ltd., Nifty 50) at Rs 1,428.1 -- broke 1,275.7, RSI 69.9, stop 1,214.94, qty 32
 - **ADANIPORTS** (Adani Ports and Special Economic Zone Ltd., Nifty 50, also weekly) at Rs 1,850.0 -- broke 1,891.1, RSI 61.3, stop 1,637.22, qty 10
 - **ATHERENERG** (Ather Energy Ltd., Smallcap 50, also weekly) at Rs 1,756.0 -- broke 1,784.5, RSI 69.8, stop 1,345.7, qty 7
 - **DIVISLAB** (Divi's Laboratories Ltd., Nifty Next 50) at Rs 9,780.0 -- broke 9,865.0, RSI 64.4, stop 8,735.38, qty 1
-- **COFORGE** (Coforge Ltd., Midcap 100) at Rs 2,045.0 -- broke 2,061.8, RSI 66.7, stop 1,797.09, qty 9
+- **COFORGE** (Coforge Ltd., Midcap 100) at Rs 2,045.0 -- broke 2,061.8, RSI 66.7, stop 1,796.93, qty 8
 - **APOLLOHOSP** (Apollo Hospitals Enterprise Ltd., Nifty 50, also weekly) at Rs 8,448.0 -- broke 7,856.75, RSI 59.7, stop 7,523.26, qty 5
 - **MCX** (Multi Commodity Exchange of India Ltd., Midcap Select) at Rs 3,188.8 -- broke 3,404.33, RSI 49.1, stop 2,985.0, qty 13
 - **ADANIPOWER** (Adani Power Ltd., Nifty Next 50, also weekly) at Rs 189.0 -- broke 201.98, RSI 45.4, stop 177.74, qty 225
@@ -35,9 +35,9 @@ Divergence confirmed and price has cleared the resistance.
 - **OFSS** (Oracle Financial Services Software Ltd., Midcap 100, also weekly) at Rs 9,995.0 -- broke 10,682.25, RSI 39.4, stop 12,026.37, qty 3
 - **HFCL** (HFCL Ltd., Smallcap 50) at Rs 231.29 -- broke 218.87, RSI 43.7, stop 198.63, qty 98
 - **BSOFT** (Birlasoft Ltd., Smallcap 250, also weekly) at Rs 323.0 -- broke 305.19, RSI 59.4, stop 282.34, qty 87
-- _...and 63 more -- see the dashboard._
+- _...and 64 more -- see the dashboard._
 
-## Armed on daily, within 20% of the trigger (490)
+## Armed on daily, within 20% of the trigger (488)
 Closest to the resistance break first.
 
 - **HYUNDAI** (Nifty Next 50, also weekly) at Rs 1,911.0 -- needs 0.02% to clear 1,911.35 (RSI 40.9)
@@ -70,7 +70,7 @@ Closest to the resistance break first.
 - **METROPOLIS** (Microcap 250, also weekly) at Rs 545.65 -- needs 0.85% to clear 550.28 (RSI 49.6)
 - **SHAILY** (Microcap 250) at Rs 3,169.8 -- needs 0.89% to clear 3,197.86 (RSI 56.0)
 - **LOTUSDEV** (Microcap 250) at Rs 245.98 -- needs 0.92% to clear 248.25 (RSI 60.7)
-- _...and 460 more within 20%._
+- _...and 458 more within 20%._
 
 _78 more armed on daily sit further than 20% below their resistance._
 
