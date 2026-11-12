@@ -9,11 +9,11 @@ Divergence confirmed and price has cleared the resistance.
 - **RELIANCE** (Reliance Industries Ltd., Nifty 50, also weekly) at Rs 1,335.4 -- broke 1,306.73, RSI 70.2, stop 1,260.43, qty 43
 - **ICICIBANK** (ICICI Bank Ltd., Nifty Bank) at Rs 1,571.6 -- broke 1,430.32, RSI 76.1, stop 1,379.9, qty 39
 - **BHARTIARTL** (Bharti Airtel Ltd., Nifty 50, also weekly) at Rs 2,109.0 -- broke 1,882.29, RSI 71.4, stop 1,812.43, qty 28
-- **BSE** (BSE Ltd., Nifty 50) at Rs 3,906.0 -- broke 3,441.66, RSI 73.5, stop 3,274.62, qty 11
+- **BSE** (BSE Ltd., Nifty 50) at Rs 3,906.0 -- broke 3,441.66, RSI 73.5, stop 3,163.71, qty 3
 - **SBIN** (State Bank of India, Nifty Bank, also weekly) at Rs 1,061.2 -- broke 983.47, RSI 71.2, stop 948.79, qty 57
-- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 487.7 -- broke 491.05, RSI 75.0, stop 392.25, qty 27
+- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 487.7 -- broke 491.05, RSI 75.0, stop 392.26, qty 27
 - **BAJFINANCE** (Bajaj Finance Ltd., Nifty 50) at Rs 1,078.8 -- broke 988.67, RSI 67.6, stop 942.67, qty 43
-- **ETERNAL** (Eternal Ltd., Nifty 50, also weekly) at Rs 361.1 -- broke 332.95, RSI 67.0, stop 299.55, qty 40
+- **ETERNAL** (Eternal Ltd., Nifty 50, also weekly) at Rs 361.1 -- broke 332.95, RSI 67.0, stop 299.51, qty 40
 - **LT** (Larsen & Toubro Ltd., Nifty 50, also weekly) at Rs 4,212.0 -- broke 3,976.47, RSI 78.7, stop 3,740.94, qty 5
 - **AXISBANK** (Axis Bank Ltd., Nifty Bank, also weekly) at Rs 1,336.4 -- broke 1,302.34, RSI 68.7, stop 1,256.53, qty 43
 - **DIVISLAB** (Divi's Laboratories Ltd., Nifty Next 50) at Rs 11,367.0 -- broke 11,824.0, RSI 79.1, stop 8,800.39, qty 3
@@ -76,42 +76,42 @@ _21 more armed on daily sit further than 20% below their resistance._
 
 # Weekly candles — the current weekly candle is still forming, so these can change
 
-## Triggered on weekly (311)
+## Triggered on weekly (312)
 Divergence confirmed and price has cleared the resistance.
 
 - **RELIANCE** (Reliance Industries Ltd., Nifty 50, also daily) at Rs 1,335.4 -- broke 1,292.44, RSI 55.6, stop 1,198.01, qty 21
 - **ICICIBANK** (ICICI Bank Ltd., Nifty Bank) at Rs 1,571.6 -- broke 1,616.0, RSI 72.4, stop 1,275.73, qty 9
 - **BHARTIARTL** (Bharti Airtel Ltd., Nifty 50, also daily) at Rs 2,109.0 -- broke 2,174.5, RSI 64.1, stop 1,703.16, qty 6
 - **BSE** (BSE Ltd., Nifty 50) at Rs 3,906.0 -- broke 4,446.8, RSI 62.8, stop 3,190.0, qty 5
-- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 487.7 -- broke 451.93, RSI 71.4, stop 339.65, qty 16
+- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 487.7 -- broke 451.93, RSI 71.4, stop 339.59, qty 16
 - **ETERNAL** (Eternal Ltd., Nifty 50, also daily) at Rs 361.1 -- broke 368.45, RSI 69.0, stop 296.62, qty 26
 - **LT** (Larsen & Toubro Ltd., Nifty 50, also daily) at Rs 4,212.0 -- broke 4,272.3, RSI 61.3, stop 3,595.0, qty 6
 - **AXISBANK** (Axis Bank Ltd., Nifty Bank, also daily) at Rs 1,336.4 -- broke 1,212.53, RSI 58.0, stop 1,120.16, qty 21
 - **GROWW** (Billionbrains Garage Ventures Ltd., Midcap 100) at Rs 221.22 -- broke 224.09, RSI 62.5, stop 177.5, qty 125
-- **MCX** (Multi Commodity Exchange of India Ltd., Midcap Select) at Rs 3,617.6 -- broke 3,637.0, RSI 67.4, stop 2,068.31, qty 1
-- **ATHERENERG** (Ather Energy Ltd., Smallcap 50) at Rs 1,868.2 -- broke 1,904.5, RSI 72.4, stop 1,345.7, qty 4
+- **MCX** (Multi Commodity Exchange of India Ltd., Midcap Select) at Rs 3,617.6 -- broke 3,645.0, RSI 67.4, stop 2,068.31, qty 1
+- **ATHERENERG** (Ather Energy Ltd., Smallcap 50) at Rs 1,868.2 -- broke 1,926.8, RSI 72.4, stop 1,345.7, qty 4
 - **APOLLO** (Apollo Micro Systems Ltd., Microcap 250) at Rs 454.15 -- broke 466.5, RSI 61.6, stop 350.45, qty 17
-- **ITC** (ITC Ltd., Nifty 50, also daily) at Rs 285.0 -- broke 315.59, RSI 52.1, stop 297.71, qty 111
+- **ITC** (ITC Ltd., Nifty 50, also daily) at Rs 285.0 -- broke 315.59, RSI 52.1, stop 297.27, qty 109
 - **ADANIPORTS** (Adani Ports and Special Economic Zone Ltd., Nifty 50, also daily) at Rs 1,907.0 -- broke 1,979.0, RSI 63.5, stop 1,570.59, qty 6
 - **KALYANKJIL** (Kalyan Jewellers India Ltd., Midcap 100, also daily) at Rs 663.75 -- broke 790.83, RSI 66.6, stop 490.6, qty 15
 - **INDHOTEL** (Indian Hotels Co. Ltd., Midcap Select, also daily) at Rs 873.0 -- broke 755.7, RSI 73.8, stop 688.79, qty 15
-- **TITAN** (Titan Company Ltd., Nifty 50, also daily) at Rs 4,970.0 -- broke 5,186.7, RSI 59.4, stop 3,766.26, qty 2
+- **TITAN** (Titan Company Ltd., Nifty 50, also daily) at Rs 4,970.0 -- broke 5,186.7, RSI 59.4, stop 3,765.26, qty 2
 - **INDIGO** (InterGlobe Aviation Ltd., Nifty 50, also daily) at Rs 5,665.0 -- broke 5,994.0, RSI 64.9, stop 4,464.4, qty 4
 - **APOLLOHOSP** (Apollo Hospitals Enterprise Ltd., Nifty 50, also daily) at Rs 8,604.0 -- broke 9,060.25, RSI 54.8, stop 6,979.89, qty 1
 - **BEL** (Bharat Electronics Ltd., Nifty 50, also daily) at Rs 399.0 -- broke 399.18, RSI 50.3, stop 354.55, qty 100
 - **SUNPHARMA** (Sun Pharmaceutical Industries Ltd., Nifty 50, also daily) at Rs 1,902.3 -- broke 1,928.98, RSI 58.0, stop 1,564.3, qty 7
 - **CANBK** (Canara Bank, Nifty Bank, also daily) at Rs 132.3 -- broke 128.9, RSI 56.8, stop 118.38, qty 190
 - **ADANIENT** (Adani Enterprises Ltd., Nifty 50, also daily) at Rs 2,714.5 -- broke 2,025.78, RSI 48.1, stop 1,750.16, qty 7
-- **PNB** (Punjab National Bank, Nifty Bank) at Rs 138.48 -- broke 142.9, RSI 73.9, stop 98.86, qty 55
+- **PNB** (Punjab National Bank, Nifty Bank) at Rs 138.48 -- broke 142.9, RSI 73.9, stop 98.77, qty 54
 - **UNIONBANK** (Union Bank of India, Nifty Bank) at Rs 202.19 -- broke 205.49, RSI 66.4, stop 154.86, qty 50
 - **ULTRACEMCO** (UltraTech Cement Ltd., Nifty 50, also daily) at Rs 12,362.0 -- broke 13,103.5, RSI 62.6, stop 10,290.58, qty 1
-- **ACUTAAS** (Acutaas Chemicals Ltd., Smallcap 50) at Rs 3,916.9 -- broke 4,045.3, RSI 65.0, stop 3,025.0, qty 2
-- **CHOLAFIN** (Cholamandalam Investment and Finance Company Ltd., Nifty Next 50, also daily) at Rs 1,814.8 -- broke 1,952.5, RSI 57.1, stop 1,415.55, qty 6
+- **ACUTAAS** (Acutaas Chemicals Ltd., Smallcap 50) at Rs 3,916.9 -- broke 4,120.0, RSI 65.0, stop 3,025.0, qty 2
+- **CHOLAFIN** (Cholamandalam Investment and Finance Company Ltd., Nifty Next 50, also daily) at Rs 1,814.8 -- broke 1,952.5, RSI 57.1, stop 1,414.84, qty 6
 - **EICHERMOT** (Eicher Motors Ltd., Nifty 50, also daily) at Rs 7,592.0 -- broke 8,197.5, RSI 53.7, stop 6,911.0, qty 4
 - **TVSMOTOR** (TVS Motor Company Ltd., Nifty Next 50) at Rs 4,560.0 -- broke 4,636.1, RSI 65.5, stop 3,875.1, qty 4
-- _...and 281 more -- see the dashboard._
+- _...and 282 more -- see the dashboard._
 
-## Armed on weekly, within 20% of the trigger (226)
+## Armed on weekly, within 20% of the trigger (227)
 Closest to the resistance break first.
 
 - **SCHNEIDER** (Smallcap 250) at Rs 1,058.8 -- needs 0.03% to clear 1,059.1 (RSI 40.7)
@@ -133,7 +133,6 @@ Closest to the resistance break first.
 - **BLUEJET** (Microcap 250) at Rs 535.75 -- needs 1.16% to clear 541.95 (RSI 50.4)
 - **MARUTI** (Nifty 50) at Rs 13,185.0 -- needs 1.17% to clear 13,339.48 (RSI 53.7)
 - **SUBROS** (Microcap 250, also daily) at Rs 606.3 -- needs 1.19% to clear 613.52 (RSI 34.3)
-- **PAGEIND** (Midcap 100) at Rs 36,570.0 -- needs 1.41% to clear 37,085.84 (RSI 49.0)
 - **EIEL** (Microcap 250, also daily) at Rs 176.0 -- needs 1.56% to clear 178.75 (RSI 43.3)
 - **DRREDDY** (Nifty 50, also daily) at Rs 1,377.0 -- needs 1.64% to clear 1,399.58 (RSI 67.2)
 - **INDIAGLYCO** (Microcap 250, also daily) at Rs 308.0 -- needs 1.64% to clear 313.06 (RSI 30.9)
@@ -144,7 +143,8 @@ Closest to the resistance break first.
 - **SARDAEN** (Smallcap 250, also daily) at Rs 444.95 -- needs 2.18% to clear 454.65 (RSI 36.9)
 - **BAJFINANCE** (Nifty 50) at Rs 1,078.8 -- needs 2.2% to clear 1,102.5 (RSI 58.0)
 - **GODREJCP** (Nifty Next 50) at Rs 878.3 -- needs 2.23% to clear 897.88 (RSI 40.0)
-- _...and 196 more within 20%._
+- **BANCOINDIA** (Microcap 250) at Rs 671.6 -- needs 2.37% to clear 687.5 (RSI 58.2)
+- _...and 197 more within 20%._
 
 _122 more armed on weekly sit further than 20% below their resistance._
 
