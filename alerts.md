@@ -11,7 +11,7 @@ Divergence confirmed and price has cleared the resistance.
 - **BHARTIARTL** (Bharti Airtel Ltd., Nifty 50, also weekly) at Rs 2,106.0 -- broke 1,882.29, RSI 69.8, stop 1,813.84, qty 29
 - **SBIN** (State Bank of India, Nifty Bank, also weekly) at Rs 1,080.0 -- broke 983.47, RSI 72.3, stop 948.76, qty 57
 - **BSE** (BSE Ltd., Nifty 50) at Rs 3,937.7 -- broke 3,441.66, RSI 74.6, stop 3,279.95, qty 12
-- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 488.55 -- broke 494.05, RSI 74.0, stop 392.16, qty 24
+- **KOTAKBANK** (Kotak Mahindra Bank Ltd., Nifty Bank) at Rs 488.55 -- broke 494.05, RSI 74.0, stop 425.14, qty 56
 - **BAJFINANCE** (Bajaj Finance Ltd., Nifty 50) at Rs 1,117.0 -- broke 988.67, RSI 72.0, stop 941.66, qty 42
 - **LT** (Larsen & Toubro Ltd., Nifty 50, also weekly) at Rs 4,143.8 -- broke 3,976.47, RSI 70.2, stop 3,741.78, qty 5
 - **ETERNAL** (Eternal Ltd., Nifty 50, also weekly) at Rs 363.65 -- broke 332.95, RSI 67.8, stop 299.33, qty 44
@@ -37,7 +37,7 @@ Divergence confirmed and price has cleared the resistance.
 - **LENSKART** (Lenskart Solutions Ltd., Midcap 100) at Rs 727.0 -- broke 762.75, RSI 65.6, stop 609.05, qty 17
 - _...and 191 more -- see the dashboard._
 
-## Armed on daily, within 20% of the trigger (412)
+## Armed on daily, within 20% of the trigger (411)
 Closest to the resistance break first.
 
 - **RADICO** (Midcap 100) at Rs 4,605.0 -- needs 0.02% to clear 4,605.8 (RSI 58.6)
@@ -70,7 +70,7 @@ Closest to the resistance break first.
 - **SANSERA** (Smallcap 250) at Rs 4,708.4 -- needs 0.75% to clear 4,743.5 (RSI 66.3)
 - **IDBI** (Smallcap 100, also weekly) at Rs 80.0 -- needs 0.75% to clear 80.6 (RSI 47.5)
 - **JIOFIN** (Nifty 50, also weekly) at Rs 227.5 -- needs 0.76% to clear 229.22 (RSI 59.3)
-- _...and 382 more within 20%._
+- _...and 381 more within 20%._
 
 _15 more armed on daily sit further than 20% below their resistance._
 
